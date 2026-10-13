@@ -1,0 +1,138 @@
+services:
+  # ----------------------------------------------------
+  # MongoDB Database Service
+  # ----------------------------------------------------
+  mongo:
+    image: mongo:7.0
+    container_name: ecommerce-mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  # ----------------------------------------------------
+  # Auth Service (Port 8001)
+  # ----------------------------------------------------
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    restart: always
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - MONGO_URI=mongodb://mongo:27017/userdb
+      - JWT_SECRET=supersecretkey123
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Product Catalog Service (Port 8003)
+  # ----------------------------------------------------
+  product-service:
+    build: ./product-service
+    container_name: product-service
+    restart: always
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+      - MONGO_URI=mongodb://mongo:27017/productdb
+      - JWT_SECRET=supersecretkey123
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Order Service (Port 8002)
+  # ----------------------------------------------------
+  order-service:
+    build: ./order-service
+    container_name: order-service
+    restart: always
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - MONGO_URI=mongodb://mongo:27017/orderdb
+      - JWT_SECRET=supersecretkey123
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Member 3: Review & Rating Service - Instance 1 (Port 8007)
+  # ----------------------------------------------------
+  review-service-1:
+    build: ./review-service
+    container_name: review-service-1
+    restart: always
+    ports:
+      - "8007:8007"
+    environment:
+      - PORT=8007
+      - INSTANCE_ID=review-instance-8007
+      - MONGO_URI=mongodb://mongo:27017/reviewdb
+      - JWT_SECRET=supersecretkey123
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Member 3: Review & Rating Service - Instance 2 (Port 8017)
+  # Demonstrates Functional Load Balancing with multiple instances
+  # ----------------------------------------------------
+  review-service-2:
+    build: ./review-service
+    container_name: review-service-2
+    restart: always
+    ports:
+      - "8017:8007"
+    environment:
+      - PORT=8007
+      - INSTANCE_ID=review-instance-8017
+      - MONGO_URI=mongodb://mongo:27017/reviewdb
+      - JWT_SECRET=supersecretkey123
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Member 3: Notification & Email Service (Port 8008)
+  # ----------------------------------------------------
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    restart: always
+    ports:
+      - "8008:8008"
+    environment:
+      - PORT=8008
+      - MONGO_URI=mongodb://mongo:27017/notificationdb
+      - JWT_SECRET=supersecretkey123
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # API Gateway (Port 8000) - Centralized Routing & Load Balancer
+  # ----------------------------------------------------
+  gateway-service:
+    build: ./gateway-service
+    container_name: gateway-service
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - PRODUCT_SERVICE_URL=http://product-service:8003
+      - ORDER_SERVICE_URL=http://order-service:8002
+      - REVIEW_SERVICE_URLS=http://review-service-1:8007,http://review-service-2:8007
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8008
+    depends_on:
+      - auth-service
+      - product-service
+      - order-service
+      - review-service-1
+      - review-service-2
+      - notification-service
+
+volumes:
+  mongo-data:

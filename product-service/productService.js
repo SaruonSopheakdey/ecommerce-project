@@ -14,7 +14,8 @@ const ProductSchema = new mongoose.Schema({
 const Product = mongoose.model('Product', ProductSchema);
 
 // Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/productdb')
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/productdb';
+mongoose.connect(MONGO_URI)
   .then(() => console.log('Connected to MongoDB productdb'))
   .catch(err => console.error('MongoDB connection error:', err));
 

@@ -16,7 +16,8 @@ const UserSchema = new mongoose.Schema({
 const User = mongoose.model('User', UserSchema);
 
 // Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/userdb')
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/userdb';
+mongoose.connect(MONGO_URI)
   .then(() => console.log('Connected to MongoDB userdb'))
   .catch(err => console.error('MongoDB connection error:', err));
 
