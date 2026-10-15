@@ -6,44 +6,69 @@ A distributed, production-ready e-commerce backend built with **Node.js**, **Exp
 
 ## 🏛️ System Architecture
 
-All client requests route through the centralized **API Gateway** on Port `8000`. The gateway directs traffic to dedicated microservices, each running its own independent MongoDB database domain.
+All client requests can route either through **Nginx Load Balancer** on Port `80` (production HTTP entry) or the **API Gateway** on Port `8000`. Nginx performs high-performance round-robin load balancing across clustered microservice replicas.
 
 ```
                                   +-----------------------+
                                   |   Postman / Client    |
                                   +-----------+-----------+
                                               |
-                                              v (Port 8000)
-                               +-----------------------------+
-                               |     API Gateway Service     |
-                               +--------------+--------------+
-                                              |
-      +--------------------+------------------+-------------------+--------------------+
-      |                    |                  |                   |                    |
-      v (8001)             v (8003)           v (8004)            v (8005)             v (8002)
-+-------------+      +-------------+    +---------------+    +------------+      +-------------+
-|    Auth     |      |   Product   |    |   Inventory   |    |    Cart    |      |    Order    |
-|   Service   |      |   Catalog   |    |    Service    |    |   Service  |      |   Service   |
-+------+------+      +------+------+    +-------+-------+    +-----+------+      +------+------+
-       |                    |                   |                  |                    |
-       |                    |                   |                  |                    |
-       |             +------+-------------------+                  |                    |
-       |             |                                             |                    |
-       |             v (8007 & 8017 - Load Balanced)               |                    |
-       |      +--------------------------------+                   |                    |
-       |      |     Review & Rating Service    |                   |                    |
-       |      |  (Instance 1 & Instance 2)     |                   |                    |
-       |      +---------------+----------------+                   |                    |
-       |                      |                                    |                    |
-       |                      v (8008)                             |                    |
-       |             +---------------------------------+           |                    |
-       |             |   Notification / Email Service  |           |                    |
-       |             +----------------+----------------+           |                    |
-       |                              |                            |                    |
-+------v------------------------------v----------------------------v--------------------v------+
-|                                  MongoDB Database (Port 27017)                               |
-| (userdb | productdb | inventorydb | cartdb | orderdb | reviewdb | notificationdb)             |
-+-----------------------------------------------------------------------------------------------+
+                        +---------------------+---------------------+
+                        |                                           |
+                        v (Port 80 - Nginx LB)                      v (Port 8000 - API Gateway)
+         +-----------------------------+             +-----------------------------+
+         |     Nginx Load Balancer     |             |     API Gateway Service     |
+         +--------------+--------------+             +--------------+--------------+
+                        |                                           |
+      +-----------------+---------------------+---------------------+-----------------+
+      |                 |                     |                     |                 |
+      v (8001)          v (Upstream)          v (8004 & 8005)       v (8002)          v (Upstream)          v (8008)
++-----------+    +-------------+       +-------------+        +-----------+    +-------------+       +--------------+
+|   Auth    |    |   Product   |       |  Inventory  |        |   Order   |    |   Review    |       | Notification |
+|  Service  |    |   Cluster   |       |   & Cart    |        |  Service  |    |   Cluster   |       |   Service    |
+|  (8001)   |    |(8003 & 8013)|       |(8004 & 8005)|        |  (8002)   |    |(8007 & 8017)|       |    (8008)    |
++-----+-----+    +------+------+       +------+------+        +-----+-----+    +------+------+       +-------+------+
+      |                 |                     |                     |                 |                      |
+      v                 v                     v                     v                 v                      v
+  [userdb]        [productdb]      [inventorydb & cartdb]       [orderdb]         [reviewdb]         [notificationdb]
+      |                 |                     |                     |                 |                      |
++-----v-----------------v---------------------v---------------------v-----------------v----------------------v----+
+|                                        MongoDB Database Engine (Port 27017)                                     |
++-----------------------------------------------------------------------------------------------------------------+
+```
+
+### Visual Architecture Flow (Mermaid)
+
+```mermaid
+flowchart TD
+    Client["Client / Postman"] --> LB["Nginx Load Balancer (Port 80) / API Gateway (Port 8000)"]
+
+    subgraph HighTraffic ["High-Traffic Clustered Services (Load Balanced)"]
+        direction TB
+        LB -->|Round-Robin| PC1["Product Service 1 (8003)"]
+        LB -->|Round-Robin| PC2["Product Service 2 (8013)"]
+        LB -->|Round-Robin| RS1["Review Service 1 (8007)"]
+        LB -->|Round-Robin| RS2["Review Service 2 (8017)"]
+    end
+
+    subgraph StandardServices ["Standard Microservices"]
+        direction TB
+        LB --> AS["Auth Service (8001)"]
+        LB --> IS["Inventory Service (8004)"]
+        LB --> CS["Cart Service (8005)"]
+        LB --> OS["Order Service (8002)"]
+        LB --> NS["Notification Service (8008)"]
+    end
+
+    subgraph Database ["MongoDB Databases (Port 27017)"]
+        PC1 & PC2 --> DB_P[("productdb")]
+        RS1 & RS2 --> DB_R[("reviewdb")]
+        AS --> DB_A[("userdb")]
+        IS --> DB_I[("inventorydb")]
+        CS --> DB_C[("cartdb")]
+        OS --> DB_O[("orderdb")]
+        NS --> DB_N[("notificationdb")]
+    end
 ```
 
 ---
@@ -52,7 +77,8 @@ All client requests route through the centralized **API Gateway** on Port `8000`
 
 | Role | Service | Port | Database | Responsibilities |
 | :--- | :--- | :--- | :--- | :--- |
-| **Infrastructure** | **API Gateway** | `8000` | N/A | Reverse proxy, dynamic routing, round-robin load balancer. |
+| **Load Balancer** | **Nginx** | `80` | N/A | Production reverse proxy, upstream health, high-throughput round-robin load balancing. |
+| **API Gateway** | **Gateway Service** | `8000` | N/A | Centralized microservice routing and developer proxy. |
 | **Core** | **Auth Service** | `8001` | `userdb` | User registration, login, bcrypt hashing, JWT issuance. |
 | **Member 1** | **Product Catalog** | `8003` & `8013` | `productdb` | Product listings, CRUD items, multi-instance load balancing. |
 | **Member 1** | **Inventory Service** | `8004` | `inventorydb` | Stock quantities, low stock detection, stock deduction. |
@@ -65,18 +91,19 @@ All client requests route through the centralized **API Gateway** on Port `8000`
 
 ## 🚀 Key Architectural Highlights
 
-1. **Fully Distributed Docker Containerization**
-   * Every microservice contains its own `Dockerfile` using lightweight `node:22-alpine`.
-   * Root `docker-compose.yml` orchestrates all 8 containers, networks, environment variables, and persistent MongoDB volumes.
-2. **JWT Authentication & Complete RBAC**
+1. **Production-Grade Nginx Load Balancer**
+   * Nginx listens on **Port 80** with configured `upstream` blocks for high-traffic clusters.
+   * **Product Catalog Cluster**: `product-service-1:8003` and `product-service-2:8003`.
+   * **Review & Rating Cluster**: `review-service-1:8007` and `review-service-2:8007`.
+   * Adds `X-Load-Balancer: Nginx` and `X-Upstream-Server` response headers for transparent instance tracking.
+2. **Fully Distributed Docker Containerization**
+   * Every microservice + Nginx contains its own `Dockerfile` using lightweight Alpine images.
+   * Root `docker-compose.yml` orchestrates all 10 containers, networks, and persistent MongoDB volumes.
+3. **JWT Authentication & Complete RBAC**
    * Centralized JWT verification (`verifyToken`) and role validation (`requireRole('Admin')` / `requireRole('Customer')`).
    * Ownership checks: Customers can only modify/delete their own reviews, carts, and notifications.
-3. **Database Connectivity & Full CRUD**
+4. **Database Connectivity & Full CRUD**
    * Schema validation, structured Mongoose models, and complete Create, Read, Update, Delete across all services.
-4. **Functional Load Balancing for High-Traffic Services**
-   * **Product Catalog Service**: Dual instances (`product-service-1` on port `8003`, `product-service-2` on port `8013`).
-   * **Review & Rating Service**: Dual instances (`review-service-1` on port `8007`, `review-service-2` on port `8017`).
-   * API Gateway distributes traffic round-robin, verified via terminal logs and `X-Served-By` response headers.
 
 ---
 
@@ -175,31 +202,74 @@ All microservices will be live and accessible via the API Gateway:
 
 ## 🧪 Testing & Verification Guide
 
-### 1. Load Balancing Verification
-Send two consecutive requests to:
-```http
-GET http://localhost:8000/api/reviews/health
+### 1. Nginx Load Balancing Verification
+
+#### Load Balancer Configuration (`nginx/nginx.conf`):
+```nginx
+# Round-robin load balancing for Product Catalog
+upstream product_service_cluster {
+    server product-service-1:8003;
+    server product-service-2:8003;
+}
+
+# Round-robin load balancing for Review & Rating Service
+upstream review_service_cluster {
+    server review-service-1:8007;
+    server review-service-2:8007;
+}
+
+server {
+    listen 80;
+    
+    # Custom headers for verification
+    add_header X-Load-Balancer "Nginx" always;
+    add_header X-Upstream-Server $upstream_addr always;
+
+    location /api/products {
+        proxy_pass http://product_service_cluster;
+    }
+
+    location /api/reviews {
+        proxy_pass http://review_service_cluster;
+    }
+}
 ```
-* **Request 1 Response**: `"instanceId": "review-instance-8007"`, Header: `X-Served-By: review-instance-8007`
-* **Request 2 Response**: `"instanceId": "review-instance-8017"`, Header: `X-Served-By: review-instance-8017`
+
+#### Verification via Postman (Port 80 or Port 8000):
+Send consecutive `GET` requests to the Nginx Load Balancer:
+```http
+GET http://localhost/api/reviews/health
+```
+*(On EC2, use `http://<EC2-PUBLIC-IP>/api/reviews/health` on default HTTP Port 80)*
+
+* **Request 1**:
+  * Response Header: `X-Load-Balancer: Nginx`
+  * Response Header: `X-Upstream-Server: 172.x.x.x:8007` (Instance 1)
+  * Response Header: `X-Served-By: review-instance-8007`
+* **Request 2**:
+  * Response Header: `X-Load-Balancer: Nginx`
+  * Response Header: `X-Upstream-Server: 172.x.x.x:8007` (Instance 2)
+  * Response Header: `X-Served-By: review-instance-8017`
 
 And similarly for Product Catalog:
 ```http
-GET http://localhost:8000/api/products/health
+GET http://localhost/api/products/health
 ```
-* **Request 1 Response**: `"instanceId": "product-instance-8003"`, Header: `X-Served-By: product-instance-8003`
-* **Request 2 Response**: `"instanceId": "product-instance-8013"`, Header: `X-Served-By: product-instance-8013`
-* **Gateway Console Log**: Displays round-robin routing between instances for both services.
+* Alternates between `product-instance-8003` and `product-instance-8013`.
 
-### 2. Security & RBAC Test Cases (Required for Screenshots)
+---
+
+### 2. Security & RBAC Test Cases
 * **Wrong Password**:
-  * `POST http://localhost:8000/api/auth/login` with incorrect password → `400 Bad Request` (`{"message": "Wrong password"}`)
+  * `POST http://localhost/api/auth/login` (or `:8000`) with incorrect password → `400 Bad Request` (`{"message": "Wrong password"}`)
 * **Invalid / Expired Token**:
-  * `GET http://localhost:8000/api/reviews` with `Authorization: Bearer invalidtoken123` → `400 Bad Request` (`{"message": "Invalid or Expired Token"}`)
+  * `GET http://localhost/api/reviews` with `Authorization: Bearer invalidtoken123` → `400 Bad Request` (`{"message": "Invalid or Expired Token"}`)
 * **Unauthorized Role Mismatch**:
-  * `POST http://localhost:8000/api/products` using a Customer Token → `403 Forbidden` (`{"message": "Access Denied: Unauthorized Role"}`)
+  * `POST http://localhost/api/products` using a Customer Token → `403 Forbidden` (`{"message": "Access Denied: Unauthorized Role"}`)
 * **Missing Token**:
   * Any protected route without token → `401 Unauthorized` (`{"message": "Access Denied: No Token Provided"}`)
+
+---
 
 ### 3. Inspecting MongoDB Collections
 ```bash
@@ -219,8 +289,11 @@ db.notifications.find().pretty()
 
 ## ☁️ Deployment on AWS EC2
 1. Launch an **Ubuntu 24.04** instance on EC2.
-2. Open Security Group Inbound Rule for **Port 8000** (`Custom TCP`, `0.0.0.0/0`).
-3. Install Docker:
+2. **Security Group Inbound Rules (CRUCIAL)**:
+   * **Port 22** (`SSH`, `0.0.0.0/0`) — Remote terminal access.
+   * **Port 80** (`HTTP`, `0.0.0.0/0`) — **Nginx Load Balancer** entry.
+   * **Port 8000** (`Custom TCP`, `0.0.0.0/0`) — **API Gateway** entry.
+3. Install Docker & Compose:
    ```bash
    sudo apt update && sudo apt install -y git docker.io docker-compose-v2
    sudo usermod -aG docker $USER
@@ -230,4 +303,7 @@ db.notifications.find().pretty()
    ```bash
    docker compose up -d --build
    ```
-5. Test against your Public IPv4: `http://<EC2-PUBLIC-IP>:8000`.
+5. Test against your Public IPv4 in Postman:
+   * Via Nginx Load Balancer: `http://<EC2-PUBLIC-IP>/api/reviews/health`
+   * Via API Gateway: `http://<EC2-PUBLIC-IP>:8000/api/reviews/health`
+

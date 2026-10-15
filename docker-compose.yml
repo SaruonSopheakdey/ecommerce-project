@@ -1,5 +1,25 @@
 services:
   # ----------------------------------------------------
+  # Nginx Load Balancer & Reverse Proxy (Port 80)
+  # ----------------------------------------------------
+  nginx-loadbalancer:
+    build: ./nginx
+    container_name: nginx-loadbalancer
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - auth-service
+      - product-service-1
+      - product-service-2
+      - inventory-service
+      - cart-service
+      - order-service
+      - review-service-1
+      - review-service-2
+      - notification-service
+
+  # ----------------------------------------------------
   # MongoDB Database Service
   # ----------------------------------------------------
   mongo:
@@ -28,7 +48,7 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # Product Catalog Service - Instance 1 (Port 8003) [Load Balanced]
+  # Product Catalog Service - Instance 1 (Port 8003) [Nginx Load Balanced]
   # ----------------------------------------------------
   product-service-1:
     build: ./product-service
@@ -45,7 +65,7 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # Product Catalog Service - Instance 2 (Port 8013) [Load Balanced]
+  # Product Catalog Service - Instance 2 (Port 8013) [Nginx Load Balanced]
   # ----------------------------------------------------
   product-service-2:
     build: ./product-service
@@ -110,7 +130,7 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # Review & Rating Service - Instance 1 (Port 8007) [Load Balanced]
+  # Review & Rating Service - Instance 1 (Port 8007) [Nginx Load Balanced]
   # ----------------------------------------------------
   review-service-1:
     build: ./review-service
@@ -127,7 +147,7 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # Review & Rating Service - Instance 2 (Port 8017) [Load Balanced]
+  # Review & Rating Service - Instance 2 (Port 8017) [Nginx Load Balanced]
   # ----------------------------------------------------
   review-service-2:
     build: ./review-service
@@ -160,7 +180,7 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # API Gateway (Port 8000) - Centralized Routing & Load Balancer
+  # API Gateway (Port 8000)
   # ----------------------------------------------------
   gateway-service:
     build: ./gateway-service

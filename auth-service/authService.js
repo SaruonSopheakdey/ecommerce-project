@@ -2,9 +2,11 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const cors = require('cors');
 const { JWT_SECRET } = require('./authMiddleware');
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 // User Database Schema
@@ -21,8 +23,15 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('Connected to MongoDB userdb'))
   .catch(err => console.error('MongoDB connection error:', err));
 
+const router = express.Router();
+
+// Health check
+router.get('/health', (req, res) => {
+  res.json({ status: 'UP', service: 'auth-service' });
+});
+
 // API 1: Registration
-app.post('/register', async (req, res) => {
+router.post('/register', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
     const user = new User({ email: req.body.email, password: hashedPassword, role: req.body.role });
@@ -34,16 +43,26 @@ app.post('/register', async (req, res) => {
 });
 
 // API 2: Login
-app.post('/login', async (req, res) => {
-  const user = await User.findOne({ email: req.body.email });
-  if (!user) return res.status(400).json({ message: "User not found" });
+router.post('/login', async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.body.email });
+    if (!user) return res.status(400).json({ message: "User not found" });
 
-  const validPassword = await bcrypt.compare(req.body.password, user.password);
-  if (!validPassword) return res.status(400).json({ message: "Wrong password" });
+    const validPassword = await bcrypt.compare(req.body.password, user.password);
+    if (!validPassword) return res.status(400).json({ message: "Wrong password" });
 
-  // Create JWT Token containing the user's role
-  const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
-  res.json({ token, role: user.role });
+    // Create JWT Token containing the user's role
+    const token = jwt.sign({ id: user._id, role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+    res.json({ token, role: user.role });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.listen(8001, () => console.log('Auth Service running on port 8001'));
+// Support all proxy path variants
+app.use('/api/auth', router);
+app.use('/api', router);
+app.use('/', router);
+
+const PORT = process.env.PORT || 8001;
+app.listen(PORT, () => console.log(`Auth Service running on port ${PORT}`));
