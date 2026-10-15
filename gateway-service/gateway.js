@@ -10,9 +10,17 @@ app.use('/api/auth', createProxyMiddleware({
   pathRewrite: { '^/api/auth': '/api' }
 }));
 
-// 2. Product Catalog Service (Port 8003)
+// 2. Product Catalog Service (Port 8003 & 8013 - High-Traffic Round-Robin Load Balancing)
+const productInstances = (process.env.PRODUCT_SERVICE_URLS || 'http://localhost:8003,http://localhost:8013').split(',');
+let productTurn = 0;
+
 app.use('/api/products', createProxyMiddleware({ 
-  target: process.env.PRODUCT_SERVICE_URL || 'http://localhost:8003', 
+  router: () => {
+    const selectedTarget = productInstances[productTurn % productInstances.length].trim();
+    console.log(`[API Gateway - Load Balancer] Forwarding /api/products request to instance: ${selectedTarget}`);
+    productTurn++;
+    return selectedTarget;
+  },
   changeOrigin: true 
 }));
 
@@ -34,7 +42,7 @@ app.use('/api/orders', createProxyMiddleware({
   changeOrigin: true 
 }));
 
-// 6. Review & Rating Service (Port 8007 & 8017 - Demonstrates Functional Load Balancing)
+// 6. Review & Rating Service (Port 8007 & 8017 - High-Traffic Round-Robin Load Balancing)
 const reviewInstances = (process.env.REVIEW_SERVICE_URLS || 'http://localhost:8007,http://localhost:8017').split(',');
 let reviewTurn = 0;
 
@@ -60,9 +68,13 @@ app.get('/health', (req, res) => {
     status: 'UP',
     service: 'api-gateway',
     timestamp: new Date().toISOString(),
+    loadBalancedServices: {
+      products: productInstances,
+      reviews: reviewInstances
+    },
     routes: {
       auth: process.env.AUTH_SERVICE_URL || 'http://localhost:8001',
-      products: process.env.PRODUCT_SERVICE_URL || 'http://localhost:8003',
+      products: productInstances,
       inventory: process.env.INVENTORY_SERVICE_URL || 'http://localhost:8004',
       cart: process.env.CART_SERVICE_URL || 'http://localhost:8005',
       orders: process.env.ORDER_SERVICE_URL || 'http://localhost:8002',

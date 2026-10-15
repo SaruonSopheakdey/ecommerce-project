@@ -28,16 +28,34 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # Product Catalog Service (Port 8003)
+  # Product Catalog Service - Instance 1 (Port 8003) [Load Balanced]
   # ----------------------------------------------------
-  product-service:
+  product-service-1:
     build: ./product-service
-    container_name: product-service
+    container_name: product-service-1
     restart: always
     ports:
       - "8003:8003"
     environment:
       - PORT=8003
+      - INSTANCE_ID=product-instance-8003
+      - MONGO_URI=mongodb://mongo:27017/productdb
+      - JWT_SECRET=supersecretkey123
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Product Catalog Service - Instance 2 (Port 8013) [Load Balanced]
+  # ----------------------------------------------------
+  product-service-2:
+    build: ./product-service
+    container_name: product-service-2
+    restart: always
+    ports:
+      - "8013:8003"
+    environment:
+      - PORT=8003
+      - INSTANCE_ID=product-instance-8013
       - MONGO_URI=mongodb://mongo:27017/productdb
       - JWT_SECRET=supersecretkey123
     depends_on:
@@ -92,7 +110,7 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # Member 3: Review & Rating Service - Instance 1 (Port 8007)
+  # Review & Rating Service - Instance 1 (Port 8007) [Load Balanced]
   # ----------------------------------------------------
   review-service-1:
     build: ./review-service
@@ -109,8 +127,7 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # Member 3: Review & Rating Service - Instance 2 (Port 8017)
-  # Demonstrates Functional Load Balancing with multiple instances
+  # Review & Rating Service - Instance 2 (Port 8017) [Load Balanced]
   # ----------------------------------------------------
   review-service-2:
     build: ./review-service
@@ -127,7 +144,7 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # Member 3: Notification & Email Service (Port 8008)
+  # Notification & Email Service (Port 8008)
   # ----------------------------------------------------
   notification-service:
     build: ./notification-service
@@ -154,7 +171,7 @@ services:
     environment:
       - PORT=8000
       - AUTH_SERVICE_URL=http://auth-service:8001
-      - PRODUCT_SERVICE_URL=http://product-service:8003
+      - PRODUCT_SERVICE_URLS=http://product-service-1:8003,http://product-service-2:8003
       - INVENTORY_SERVICE_URL=http://inventory-service:8004
       - CART_SERVICE_URL=http://cart-service:8005
       - ORDER_SERVICE_URL=http://order-service:8002
@@ -162,7 +179,8 @@ services:
       - NOTIFICATION_SERVICE_URL=http://notification-service:8008
     depends_on:
       - auth-service
-      - product-service
+      - product-service-1
+      - product-service-2
       - inventory-service
       - cart-service
       - order-service

@@ -54,7 +54,7 @@ All client requests route through the centralized **API Gateway** on Port `8000`
 | :--- | :--- | :--- | :--- | :--- |
 | **Infrastructure** | **API Gateway** | `8000` | N/A | Reverse proxy, dynamic routing, round-robin load balancer. |
 | **Core** | **Auth Service** | `8001` | `userdb` | User registration, login, bcrypt hashing, JWT issuance. |
-| **Member 1** | **Product Catalog** | `8003` | `productdb` | Product listings, CRUD items (Admin adds, Customer views). |
+| **Member 1** | **Product Catalog** | `8003` & `8013` | `productdb` | Product listings, CRUD items, multi-instance load balancing. |
 | **Member 1** | **Inventory Service** | `8004` | `inventorydb` | Stock quantities, low stock detection, stock deduction. |
 | **Member 2** | **Cart Service** | `8005` | `cartdb` | Add/remove items, update quantities, calculate cart totals. |
 | **Member 2** | **Order Service** | `8002` | `orderdb` | Order placement, user order history. |
@@ -65,17 +65,18 @@ All client requests route through the centralized **API Gateway** on Port `8000`
 
 ## 🚀 Key Architectural Highlights
 
-1. **Fully Distributed Docker Containerization (Rubric: 10 pts)**
+1. **Fully Distributed Docker Containerization**
    * Every microservice contains its own `Dockerfile` using lightweight `node:22-alpine`.
    * Root `docker-compose.yml` orchestrates all 8 containers, networks, environment variables, and persistent MongoDB volumes.
-2. **JWT Authentication & Complete RBAC (Rubric: 10 pts)**
+2. **JWT Authentication & Complete RBAC**
    * Centralized JWT verification (`verifyToken`) and role validation (`requireRole('Admin')` / `requireRole('Customer')`).
    * Ownership checks: Customers can only modify/delete their own reviews, carts, and notifications.
-3. **Database Connectivity & Full CRUD (Rubric: 10 pts)**
+3. **Database Connectivity & Full CRUD**
    * Schema validation, structured Mongoose models, and complete Create, Read, Update, Delete across all services.
-4. **Functional Load Balancing (Rubric: 5 pts)**
-   * Review Service runs **two instances** (`review-service-1` on port `8007` and `review-service-2` on port `8017`).
-   * API Gateway distributes `/api/reviews` requests round-robin, verified via terminal logs and `X-Served-By` response headers.
+4. **Functional Load Balancing for High-Traffic Services**
+   * **Product Catalog Service**: Dual instances (`product-service-1` on port `8003`, `product-service-2` on port `8013`).
+   * **Review & Rating Service**: Dual instances (`review-service-1` on port `8007`, `review-service-2` on port `8017`).
+   * API Gateway distributes traffic round-robin, verified via terminal logs and `X-Served-By` response headers.
 
 ---
 
@@ -89,7 +90,7 @@ All client requests route through the centralized **API Gateway** on Port `8000`
 ### Running with Docker Compose (Recommended)
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/SaruonSopheakdey/ecommerce-project.git
 cd ecommerce-project
 
 # Build and start all services in detached mode
@@ -181,7 +182,14 @@ GET http://localhost:8000/api/reviews/health
 ```
 * **Request 1 Response**: `"instanceId": "review-instance-8007"`, Header: `X-Served-By: review-instance-8007`
 * **Request 2 Response**: `"instanceId": "review-instance-8017"`, Header: `X-Served-By: review-instance-8017`
-* **Gateway Console Log**: Displays round-robin routing between `8007` and `8017`.
+
+And similarly for Product Catalog:
+```http
+GET http://localhost:8000/api/products/health
+```
+* **Request 1 Response**: `"instanceId": "product-instance-8003"`, Header: `X-Served-By: product-instance-8003`
+* **Request 2 Response**: `"instanceId": "product-instance-8013"`, Header: `X-Served-By: product-instance-8013`
+* **Gateway Console Log**: Displays round-robin routing between instances for both services.
 
 ### 2. Security & RBAC Test Cases (Required for Screenshots)
 * **Wrong Password**:
