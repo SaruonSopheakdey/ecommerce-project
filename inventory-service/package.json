@@ -1,0 +1,21 @@
+{
+  "name": "inventory-service",
+  "version": "1.0.0",
+  "description": "Inventory and Stock Management Microservice",
+  "main": "inventoryService.js",
+  "scripts": {
+    "start": "node inventoryService.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.6",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.11.1"
+  }
+}

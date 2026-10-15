@@ -3,26 +3,38 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 
-// 1. Auth Service
+// 1. Auth Service (Port 8001)
 app.use('/api/auth', createProxyMiddleware({ 
   target: process.env.AUTH_SERVICE_URL || 'http://localhost:8001', 
   changeOrigin: true,
   pathRewrite: { '^/api/auth': '/api' }
 }));
 
-// 2. Product Service
+// 2. Product Catalog Service (Port 8003)
 app.use('/api/products', createProxyMiddleware({ 
   target: process.env.PRODUCT_SERVICE_URL || 'http://localhost:8003', 
   changeOrigin: true 
 }));
 
-// 3. Order Service
+// 3. Inventory Service (Port 8004)
+app.use('/api/inventory', createProxyMiddleware({ 
+  target: process.env.INVENTORY_SERVICE_URL || 'http://localhost:8004', 
+  changeOrigin: true 
+}));
+
+// 4. Cart Service (Port 8005)
+app.use('/api/cart', createProxyMiddleware({ 
+  target: process.env.CART_SERVICE_URL || 'http://localhost:8005', 
+  changeOrigin: true 
+}));
+
+// 5. Order Service (Port 8002)
 app.use('/api/orders', createProxyMiddleware({ 
   target: process.env.ORDER_SERVICE_URL || 'http://localhost:8002', 
   changeOrigin: true 
 }));
 
-// 4. Review & Rating Service (Port 8007 & 8017 - Demonstrates Functional Load Balancing)
+// 6. Review & Rating Service (Port 8007 & 8017 - Demonstrates Functional Load Balancing)
 const reviewInstances = (process.env.REVIEW_SERVICE_URLS || 'http://localhost:8007,http://localhost:8017').split(',');
 let reviewTurn = 0;
 
@@ -36,7 +48,7 @@ app.use('/api/reviews', createProxyMiddleware({
   changeOrigin: true 
 }));
 
-// 5. Notification / Email Service (Port 8008)
+// 7. Notification / Email Service (Port 8008)
 app.use('/api/notifications', createProxyMiddleware({ 
   target: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8008', 
   changeOrigin: true 
@@ -49,9 +61,11 @@ app.get('/health', (req, res) => {
     service: 'api-gateway',
     timestamp: new Date().toISOString(),
     routes: {
-      auth: 'http://localhost:8001',
-      products: 'http://localhost:8003',
-      orders: 'http://localhost:8002',
+      auth: process.env.AUTH_SERVICE_URL || 'http://localhost:8001',
+      products: process.env.PRODUCT_SERVICE_URL || 'http://localhost:8003',
+      inventory: process.env.INVENTORY_SERVICE_URL || 'http://localhost:8004',
+      cart: process.env.CART_SERVICE_URL || 'http://localhost:8005',
+      orders: process.env.ORDER_SERVICE_URL || 'http://localhost:8002',
       reviews: reviewInstances,
       notifications: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8008'
     }

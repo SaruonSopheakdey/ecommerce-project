@@ -44,6 +44,38 @@ services:
       - mongo
 
   # ----------------------------------------------------
+  # Inventory Service (Port 8004)
+  # ----------------------------------------------------
+  inventory-service:
+    build: ./inventory-service
+    container_name: inventory-service
+    restart: always
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - MONGO_URI=mongodb://mongo:27017/inventorydb
+      - JWT_SECRET=supersecretkey123
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Cart Service (Port 8005)
+  # ----------------------------------------------------
+  cart-service:
+    build: ./cart-service
+    container_name: cart-service
+    restart: always
+    ports:
+      - "8005:8005"
+    environment:
+      - PORT=8005
+      - MONGO_URI=mongodb://mongo:27017/cartdb
+      - JWT_SECRET=supersecretkey123
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
   # Order Service (Port 8002)
   # ----------------------------------------------------
   order-service:
@@ -123,12 +155,16 @@ services:
       - PORT=8000
       - AUTH_SERVICE_URL=http://auth-service:8001
       - PRODUCT_SERVICE_URL=http://product-service:8003
+      - INVENTORY_SERVICE_URL=http://inventory-service:8004
+      - CART_SERVICE_URL=http://cart-service:8005
       - ORDER_SERVICE_URL=http://order-service:8002
       - REVIEW_SERVICE_URLS=http://review-service-1:8007,http://review-service-2:8007
       - NOTIFICATION_SERVICE_URL=http://notification-service:8008
     depends_on:
       - auth-service
       - product-service
+      - inventory-service
+      - cart-service
       - order-service
       - review-service-1
       - review-service-2
