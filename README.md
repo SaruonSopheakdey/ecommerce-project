@@ -307,3 +307,10 @@ db.notifications.find().pretty()
    * Via Nginx Load Balancer: `http://<EC2-PUBLIC-IP>/api/reviews/health`
    * Via API Gateway: `http://<EC2-PUBLIC-IP>:8000/api/reviews/health`
 
+
+## Cart & Checkout (Cart Service 8005, Order Service 8006)
+
+Owner: Chamnab Hoeum
+
+- Cart Service: add, update and remove items, view and clear cart (Customer); view any cart (Admin)
+- Order Service: checkout from cart, order history (Customer); view all orders and update status (Admin)
