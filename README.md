@@ -8,36 +8,6 @@ A distributed, production-ready e-commerce backend built with **Node.js**, **Exp
 
 All client requests can route either through **Nginx Load Balancer** on Port `80` (production HTTP entry) or the **API Gateway** on Port `8000`. Nginx performs high-performance round-robin load balancing across clustered microservice replicas.
 
-```
-                                  +-----------------------+
-                                  |   Postman / Client    |
-                                  +-----------+-----------+
-                                              |
-                        +---------------------+---------------------+
-                        |                                           |
-                        v (Port 80 - Nginx LB)                      v (Port 8000 - API Gateway)
-         +-----------------------------+             +-----------------------------+
-         |     Nginx Load Balancer     |             |     API Gateway Service     |
-         +--------------+--------------+             +--------------+--------------+
-                        |                                           |
-      +-----------------+---------------------+---------------------+-----------------+
-      |                 |                     |                     |                 |
-      v (8001)          v (Upstream)          v (8004 & 8005)       v (8002)          v (Upstream)          v (8008)
-+-----------+    +-------------+       +-------------+        +-----------+    +-------------+       +--------------+
-|   Auth    |    |   Product   |       |  Inventory  |        |   Order   |    |   Review    |       | Notification |
-|  Service  |    |   Cluster   |       |   & Cart    |        |  Service  |    |   Cluster   |       |   Service    |
-|  (8001)   |    |(8003 & 8013)|       |(8004 & 8005)|        |  (8002)   |    |(8007 & 8017)|       |    (8008)    |
-+-----+-----+    +------+------+       +------+------+        +-----+-----+    +------+------+       +-------+------+
-      |                 |                     |                     |                 |                      |
-      v                 v                     v                     v                 v                      v
-  [userdb]        [productdb]      [inventorydb & cartdb]       [orderdb]         [reviewdb]         [notificationdb]
-      |                 |                     |                     |                 |                      |
-+-----v-----------------v---------------------v---------------------v-----------------v----------------------v----+
-|                                        MongoDB Database Engine (Port 27017)                                     |
-+-----------------------------------------------------------------------------------------------------------------+
-```
-
-### Visual Architecture Flow (Mermaid)
 
 ```mermaid
 flowchart TD
