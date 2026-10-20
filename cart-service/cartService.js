@@ -2,11 +2,19 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { verifyToken, requireRole } = require('./authMiddleware');
-
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Middleware to extract user identity passed by the API Gateway
+app.use((req, res, next) => {
+  req.user = {
+    id: req.headers['x-user-id'] || null,
+    role: req.headers['x-user-role'] || 'Customer',
+    email: req.headers['x-user-email'] || ''
+  };
+  next();
+});
 
 const PORT = process.env.PORT || 8005;
 
@@ -55,7 +63,7 @@ router.get('/health', (req, res) => {
 });
 
 // Route 1: Get Current User's Cart
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
     let cart = await Cart.findOne({ userId });
@@ -76,7 +84,7 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 // Route 2: Add Item to Cart
-router.post('/items', verifyToken, async (req, res) => {
+router.post('/items', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
     const { productId, productName, price, quantity } = req.body;
@@ -117,7 +125,7 @@ router.post('/items', verifyToken, async (req, res) => {
 });
 
 // Route 3: Update Item Quantity in Cart
-router.put('/items/:productId', verifyToken, async (req, res) => {
+router.put('/items/:productId', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
     const { productId } = req.params;
@@ -155,7 +163,7 @@ router.put('/items/:productId', verifyToken, async (req, res) => {
 });
 
 // Route 4: Remove Specific Item from Cart
-router.delete('/items/:productId', verifyToken, async (req, res) => {
+router.delete('/items/:productId', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
     const { productId } = req.params;
@@ -181,7 +189,7 @@ router.delete('/items/:productId', verifyToken, async (req, res) => {
 });
 
 // Route 5: Clear Cart (e.g. after placing an order)
-router.delete('/', verifyToken, async (req, res) => {
+router.delete('/', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
     const cart = await Cart.findOne({ userId });
@@ -202,7 +210,7 @@ router.delete('/', verifyToken, async (req, res) => {
 });
 
 // Route 6: Get Cart by User ID (Admin or Resource Owner)
-router.get('/user/:userId', verifyToken, async (req, res) => {
+router.get('/user/:userId', async (req, res) => {
   try {
     const requestedUserId = req.params.userId;
     const currentUserId = req.user.id || req.user._id;

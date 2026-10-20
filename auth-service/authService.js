@@ -1,9 +1,11 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const { JWT_SECRET } = require('./authMiddleware');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123';
 
 const app = express();
 app.use(cors());

@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { verifyToken, requireRole } = require('./authMiddleware');
 
 const app = express();
 app.use(cors());
@@ -14,6 +13,16 @@ const INSTANCE_ID = process.env.INSTANCE_ID || `review-instance-${PORT}`;
 // Load balancing tracking header
 app.use((req, res, next) => {
   res.setHeader('X-Served-By', INSTANCE_ID);
+  next();
+});
+
+// Middleware to extract user identity passed by the API Gateway
+app.use((req, res, next) => {
+  req.user = {
+    id: req.headers['x-user-id'] || null,
+    role: req.headers['x-user-role'] || 'Customer',
+    email: req.headers['x-user-email'] || ''
+  };
   next();
 });
 
@@ -50,7 +59,7 @@ router.get('/health', (req, res) => {
 });
 
 // Route 1: Post a new Review (Customer or Admin)
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { productId, rating, comment } = req.body;
 
@@ -136,7 +145,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Route 5: Update a Review (Owner only)
-router.put('/:id', verifyToken, async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
     if (!review) {
@@ -173,7 +182,7 @@ router.put('/:id', verifyToken, async (req, res) => {
 });
 
 // Route 6: Delete a Review (Owner or Admin)
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
     if (!review) {

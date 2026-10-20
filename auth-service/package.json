@@ -1,9 +1,10 @@
 {
   "name": "auth-service",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Authentication and User Management Service",
+  "main": "authService.js",
   "scripts": {
+    "start": "node authService.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

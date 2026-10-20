@@ -2,11 +2,19 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { verifyToken, requireRole } = require('./authMiddleware');
-
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Middleware to extract user identity passed by the API Gateway
+app.use((req, res, next) => {
+  req.user = {
+    id: req.headers['x-user-id'] || null,
+    role: req.headers['x-user-role'] || 'Customer',
+    email: req.headers['x-user-email'] || ''
+  };
+  next();
+});
 
 const PORT = process.env.PORT || 8004;
 
@@ -40,7 +48,11 @@ router.get('/health', (req, res) => {
 });
 
 // Route 1: Add / Initialize Inventory for Product (Admin Only)
-router.post('/', verifyToken, requireRole('Admin'), async (req, res) => {
+router.post('/', async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ message: "Access Denied: Admin role required" });
+  }
+
   try {
     const { productId, productName, quantity, lowStockThreshold } = req.body;
 
@@ -72,7 +84,7 @@ router.post('/', verifyToken, requireRole('Admin'), async (req, res) => {
 });
 
 // Route 2: Get All Inventory Items (Authenticated)
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const items = await Inventory.find().sort({ updatedAt: -1 });
     res.json({
@@ -104,7 +116,11 @@ router.get('/:productId', async (req, res) => {
 });
 
 // Route 4: Update / Set Stock Quantity (Admin Only)
-router.put('/:productId', verifyToken, requireRole('Admin'), async (req, res) => {
+router.put('/:productId', async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ message: "Access Denied: Admin role required" });
+  }
+
   try {
     const { quantity, productName, lowStockThreshold } = req.body;
 
@@ -130,7 +146,7 @@ router.put('/:productId', verifyToken, requireRole('Admin'), async (req, res) =>
 });
 
 // Route 5: Deduct Stock (Used by Order service or customers on checkout)
-router.post('/:productId/deduct', verifyToken, async (req, res) => {
+router.post('/:productId/deduct', async (req, res) => {
   try {
     const deductQty = Number(req.body.quantity) || 1;
     if (deductQty <= 0) {
@@ -165,7 +181,11 @@ router.post('/:productId/deduct', verifyToken, async (req, res) => {
 });
 
 // Route 6: Delete Inventory Item (Admin Only)
-router.delete('/:productId', verifyToken, requireRole('Admin'), async (req, res) => {
+router.delete('/:productId', async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ message: "Access Denied: Admin role required" });
+  }
+
   try {
     const item = await Inventory.findOneAndDelete({ productId: req.params.productId });
     if (!item) {

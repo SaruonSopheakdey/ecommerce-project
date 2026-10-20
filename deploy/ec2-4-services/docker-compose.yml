@@ -1,0 +1,94 @@
+services:
+  # ----------------------------------------------------
+  # Auth Service (Port 8001) - Issues JWT Tokens
+  # ----------------------------------------------------
+  auth-service:
+    build: ../../auth-service
+    container_name: ec2-4-auth
+    restart: always
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - MONGO_URI=${MONGO_URI_AUTH:-${MONGODB_URI_BASE}/userdb?retryWrites=true&w=majority}
+      - JWT_SECRET=${JWT_SECRET}
+
+  # ----------------------------------------------------
+  # Product Catalog Service (Port 8003)
+  # ----------------------------------------------------
+  product-service:
+    build: ../../product-service
+    container_name: ec2-4-product
+    restart: always
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+      - INSTANCE_ID=product-instance-ec2-4
+      - MONGO_URI=${MONGO_URI_PRODUCT:-${MONGODB_URI_BASE}/productdb?retryWrites=true&w=majority}
+
+  # ----------------------------------------------------
+  # Inventory Service (Port 8004)
+  # ----------------------------------------------------
+  inventory-service:
+    build: ../../inventory-service
+    container_name: ec2-4-inventory
+    restart: always
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - MONGO_URI=${MONGO_URI_INVENTORY:-${MONGODB_URI_BASE}/inventorydb?retryWrites=true&w=majority}
+
+  # ----------------------------------------------------
+  # Cart Service (Port 8005)
+  # ----------------------------------------------------
+  cart-service:
+    build: ../../cart-service
+    container_name: ec2-4-cart
+    restart: always
+    ports:
+      - "8005:8005"
+    environment:
+      - PORT=8005
+      - MONGO_URI=${MONGO_URI_CART:-${MONGODB_URI_BASE}/cartdb?retryWrites=true&w=majority}
+
+  # ----------------------------------------------------
+  # Order Service (Port 8002)
+  # ----------------------------------------------------
+  order-service:
+    build: ../../order-service
+    container_name: ec2-4-order
+    restart: always
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - MONGO_URI=${MONGO_URI_ORDER:-${MONGODB_URI_BASE}/orderdb?retryWrites=true&w=majority}
+
+  # ----------------------------------------------------
+  # Review & Rating Service (Port 8007)
+  # ----------------------------------------------------
+  review-service:
+    build: ../../review-service
+    container_name: ec2-4-review
+    restart: always
+    ports:
+      - "8007:8007"
+    environment:
+      - PORT=8007
+      - INSTANCE_ID=review-instance-ec2-4
+      - MONGO_URI=${MONGO_URI_REVIEW:-${MONGODB_URI_BASE}/reviewdb?retryWrites=true&w=majority}
+
+  # ----------------------------------------------------
+  # Notification & Email Service (Port 8008)
+  # ----------------------------------------------------
+  notification-service:
+    build: ../../notification-service
+    container_name: ec2-4-notification
+    restart: always
+    ports:
+      - "8008:8008"
+    environment:
+      - PORT=8008
+      - MONGO_URI=${MONGO_URI_NOTIFICATION:-${MONGODB_URI_BASE}/notificationdb?retryWrites=true&w=majority}

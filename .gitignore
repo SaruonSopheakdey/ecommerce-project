@@ -26,3 +26,6 @@ docker-data/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Postman
+*postman*

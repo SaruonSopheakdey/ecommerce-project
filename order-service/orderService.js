@@ -1,9 +1,23 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const { verifyToken } = require('./authMiddleware');
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
 app.use(express.json());
+
+const PORT = process.env.PORT || 8002;
+
+// Middleware to extract user identity passed by the API Gateway
+app.use((req, res, next) => {
+  req.user = {
+    id: req.headers['x-user-id'] || null,
+    role: req.headers['x-user-role'] || 'Customer',
+    email: req.headers['x-user-email'] || ''
+  };
+  next();
+});
 
 const OrderSchema = new mongoose.Schema({
   userId: { type: String, required: true },
@@ -19,11 +33,22 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('Connected to MongoDB orderdb'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Listens on root / (matches what the gateway forwards)
-app.post('/', verifyToken, async (req, res) => {
+const router = express.Router();
+
+// Health check endpoint
+router.get('/health', (req, res) => {
+  res.json({
+    status: 'UP',
+    service: 'order-service',
+    port: PORT,
+    timestamp: new Date().toISOString()
+  });
+});
+
+router.post('/', async (req, res) => {
   try {
     const order = new Order({
-      userId: req.user.id || req.user._id || "user123",
+      userId: req.user.id || req.body.userId || "user123",
       productId: req.body.productId,
       quantity: req.body.quantity,
       totalPrice: req.body.totalPrice
@@ -35,7 +60,7 @@ app.post('/', verifyToken, async (req, res) => {
   }
 });
 
-app.get('/', verifyToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const orders = await Order.find();
     res.json(orders);
@@ -44,4 +69,8 @@ app.get('/', verifyToken, async (req, res) => {
   }
 });
 
-app.listen(8002, () => console.log('Order Service running on port 8002'));
+// Support both direct root access and Nginx /api/orders path
+app.use('/api/orders', router);
+app.use('/', router);
+
+app.listen(PORT, () => console.log(`Order Service running on port ${PORT}`));

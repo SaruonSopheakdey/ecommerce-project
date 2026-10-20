@@ -1,45 +1,79 @@
 # Cloud-Native E-Commerce Microservices Architecture
 
-A distributed, production-ready e-commerce backend built with **Node.js**, **Express**, **MongoDB**, **Docker Compose**, and an **API Gateway** implementing **JWT Authentication**, **Role-Based Access Control (RBAC)**, and **Round-Robin Load Balancing**.
+A distributed, production-ready e-commerce backend built with **Node.js**, **Express**, **MongoDB**, **Docker Compose**, and an **API Gateway** implementing **Centralized JWT Authentication**, **Role-Based Access Control (RBAC)**, and **Two-Tier Round-Robin Load Balancing**.
 
 ---
 
 ## 🏛️ System Architecture
 
-All client requests can route either through **Nginx Load Balancer** on Port `80` (production HTTP entry) or the **API Gateway** on Port `8000`. Nginx performs high-performance round-robin load balancing across clustered microservice replicas.
+The system has **one public entry point** and three clearly separated layers. Each layer has exactly one job.
 
+| Layer | Component | Job | Reachable from outside? |
+| :--- | :--- | :--- | :--- |
+| 1. Edge | **Nginx** (port `80`) | Single public entry point. Round-robin load balances across the API Gateway replicas with active failover. | ✅ Yes (only port 80) |
+| 2. Gateway | **API Gateway** x2 replicas (port `8000`, internal) | Routes `/api/*` to the owning service, verifies the JWT at the edge, sanitizes spoofed headers, forwards verified identity as `X-User-*` headers, and load balances product/review instances. | ❌ Internal only |
+| 3. Services | **8 microservices** (+ 2 instances each of Product and Review) | Business logic. Downstream services consume verified `X-User-*` headers directly, eliminating repetitive token decoding code. | ❌ Internal only |
+
+```
+                        +-----------------------+
+                        |   Postman / Client    |
+                        +-----------+-----------+
+                                    |  http://host:80   (the ONLY published port)
+                                    v
+                        +-----------------------+
+                        |  Nginx (Edge / LB)    |   round-robin + failover
+                        +-----------+-----------+
+                          |                   |
+                          v                   v
+                +----------------+   +----------------+
+                | Gateway #1     |   | Gateway #2     |   JWT check + identity header forwarding
+                +-------+--------+   +--------+-------+
+                        \_____________  _____/
+                                      \/
+     +-----------+-----------+--------+--------+-----------+-------------+
+     |           |           |        |        |           |             |
+     v           v           v        v        v           v             v
+  [Auth]    [Product x2] [Inventory] [Cart]  [Order]   [Review x2]  [Notification]
+  userdb     productdb   inventorydb cartdb  orderdb    reviewdb    notificationdb
+     \___________\___________\________|________/___________/_____________/
+                                  MongoDB (internal network)
+```
+
+### Visual Architecture Flow (Mermaid)
 
 ```mermaid
 flowchart TD
-    Client["Client / Postman"] --> LB["Nginx Load Balancer (Port 80) / API Gateway (Port 8000)"]
+    Client["Client / Postman"] -->|"port 80 (only public port)"| NG["Nginx - Edge Load Balancer"]
 
-    subgraph HighTraffic ["High-Traffic Clustered Services (Load Balanced)"]
-        direction TB
-        LB -->|Round-Robin| PC1["Product Service 1 (8003)"]
-        LB -->|Round-Robin| PC2["Product Service 2 (8013)"]
-        LB -->|Round-Robin| RS1["Review Service 1 (8007)"]
-        LB -->|Round-Robin| RS2["Review Service 2 (8017)"]
+    subgraph GW ["API Gateway (internal, 2 replicas)"]
+        NG -->|Round-Robin| G1["Gateway 1"]
+        NG -->|Round-Robin| G2["Gateway 2"]
     end
 
-    subgraph StandardServices ["Standard Microservices"]
-        direction TB
-        LB --> AS["Auth Service (8001)"]
-        LB --> IS["Inventory Service (8004)"]
-        LB --> CS["Cart Service (8005)"]
-        LB --> OS["Order Service (8002)"]
-        LB --> NS["Notification Service (8008)"]
+    subgraph SVC ["Microservices (internal only)"]
+        G1 & G2 --> AS["Auth (8001)"]
+        G1 & G2 -->|Round-Robin| PC["Product x2 (8003)"]
+        G1 & G2 --> IS["Inventory (8004)"]
+        G1 & G2 --> CS["Cart (8005)"]
+        G1 & G2 --> OS["Order (8002)"]
+        G1 & G2 -->|Round-Robin| RS["Review x2 (8007)"]
+        G1 & G2 --> NS["Notification (8008)"]
     end
 
-    subgraph Database ["MongoDB Databases (Port 27017)"]
-        PC1 & PC2 --> DB_P[("productdb")]
-        RS1 & RS2 --> DB_R[("reviewdb")]
+    subgraph DB ["MongoDB (database per service)"]
         AS --> DB_A[("userdb")]
+        PC --> DB_P[("productdb")]
         IS --> DB_I[("inventorydb")]
         CS --> DB_C[("cartdb")]
         OS --> DB_O[("orderdb")]
+        RS --> DB_R[("reviewdb")]
         NS --> DB_N[("notificationdb")]
     end
 ```
+
+**Why both Nginx and an API Gateway?**
+* **Nginx (Edge Layer)**: Serves as the public-facing HTTP reverse proxy on Port 80. It handles TCP/HTTP-level connection pooling, SSL termination, and distributes traffic evenly across the API Gateway cluster with automatic health-checking and failover.
+* **API Gateway (Application Layer)**: Centralizes application concerns. It verifies JWT signatures, strips client-spoofed identity headers, rejects unauthorized requests, and propagates identity (`X-User-Id`, `X-User-Role`, `X-User-Email`) down to internal services.
 
 ---
 
@@ -47,33 +81,32 @@ flowchart TD
 
 | Role | Service | Port | Database | Responsibilities |
 | :--- | :--- | :--- | :--- | :--- |
-| **Load Balancer** | **Nginx** | `80` | N/A | Production reverse proxy, upstream health, high-throughput round-robin load balancing. |
-| **API Gateway** | **Gateway Service** | `8000` | N/A | Centralized microservice routing and developer proxy. |
-| **Core** | **Auth Service** | `8001` | `userdb` | User registration, login, bcrypt hashing, JWT issuance. |
-| **Member 1** | **Product Catalog** | `8003` & `8013` | `productdb` | Product listings, CRUD items, multi-instance load balancing. |
-| **Member 1** | **Inventory Service** | `8004` | `inventorydb` | Stock quantities, low stock detection, stock deduction. |
-| **Member 2** | **Cart Service** | `8005` | `cartdb` | Add/remove items, update quantities, calculate cart totals. |
-| **Member 2** | **Order Service** | `8002` | `orderdb` | Order placement, user order history. |
-| **Member 3** | **Review & Rating Service** | `8007` & `8017` | `reviewdb` | Product reviews, 1-5 star ratings, aggregated statistics, multi-instance load balancing. |
-| **Member 3** | **Notification Service** | `8008` | `notificationdb` | Order confirmation dispatch, status updates, email simulation engine. |
+| **Edge** | **Nginx** | `80` (public) | N/A | Only public entry point. Round-robin load balances gateway replicas. |
+| **Gateway** | **Gateway Service** (x2) | `8000` (internal) | N/A | Routing, centralized JWT validation, header sanitization, identity injection, Product & Review load balancing. |
+| **Core** | **Auth Service** | `8001` (internal) | `userdb` | User registration, login, password hashing (bcrypt), JWT generation. |
+| **Member 1** | **Product Catalog** | `8003` (x2 instances) | `productdb` | Product catalog, CRUD operations, multi-instance load balancing. |
+| **Member 1** | **Inventory Service** | `8004` (internal) | `inventorydb` | Stock tracking, low stock alerts, atomic stock deduction. |
+| **Member 2** | **Cart Service** | `8005` (internal) | `cartdb` | Item management, quantity updates, cart calculation. |
+| **Member 2** | **Order Service** | `8002` (internal) | `orderdb` | Order placement, user order history. |
+| **Member 3** | **Review & Rating Service** | `8007` (x2 instances) | `reviewdb` | Product reviews, ratings (1-5), average rating aggregation, multi-instance load balancing. |
+| **Member 3** | **Notification Service** | `8008` (internal) | `notificationdb` | Email dispatch simulator, order notification logs. |
 
 ---
 
 ## 🚀 Key Architectural Highlights
 
-1. **Production-Grade Nginx Load Balancer**
-   * Nginx listens on **Port 80** with configured `upstream` blocks for high-traffic clusters.
-   * **Product Catalog Cluster**: `product-service-1:8003` and `product-service-2:8003`.
-   * **Review & Rating Cluster**: `review-service-1:8007` and `review-service-2:8007`.
-   * Adds `X-Load-Balancer: Nginx` and `X-Upstream-Server` response headers for transparent instance tracking.
-2. **Fully Distributed Docker Containerization**
-   * Every microservice + Nginx contains its own `Dockerfile` using lightweight Alpine images.
-   * Root `docker-compose.yml` orchestrates all 10 containers, networks, and persistent MongoDB volumes.
-3. **JWT Authentication & Complete RBAC**
-   * Centralized JWT verification (`verifyToken`) and role validation (`requireRole('Admin')` / `requireRole('Customer')`).
-   * Ownership checks: Customers can only modify/delete their own reviews, carts, and notifications.
-4. **Database Connectivity & Full CRUD**
-   * Schema validation, structured Mongoose models, and complete Create, Read, Update, Delete across all services.
+1. **Single Entry Point + Zero-Trust Port Isolation**
+   * Only Nginx publishes a port (`80:80`). All downstream microservices and gateways communicate strictly over the internal Docker network.
+   * Prevents bypassing authentication or direct manipulation of microservice endpoints.
+2. **Two-Tier Load Balancing & High Availability**
+   * **Tier 1 (Nginx -> Gateway Cluster)**: Nginx round-robins requests across `gateway-service-1` and `gateway-service-2`. If one gateway goes down, Nginx automatically fails over to the surviving instance without dropping client connections.
+   * **Tier 2 (Gateway -> Clustered Services)**: Gateways round-robin requests across `product-service-1` / `product-service-2` and `review-service-1` / `review-service-2`.
+3. **Centralized Authentication (DRY Architecture)**
+   * Avoids repeating `authMiddleware.js` and `jsonwebtoken` packages across 6 microservices.
+   * Gateway strips external `x-user-*` headers, validates the incoming Bearer token once, and injects authenticated identity headers downstream.
+4. **Role-Based Access Control (RBAC)**
+   * Enforces role requirements (`Admin` vs `Customer`) at both Gateway and service level.
+   * Ownership verification ensures customers can only read/edit their own orders, reviews, and carts.
 
 ---
 
@@ -81,33 +114,28 @@ flowchart TD
 
 ### Prerequisites
 * [Docker](https://www.docker.com/) & Docker Compose
-* [Node.js](https://nodejs.org/) v20+ (if running without Docker)
 * [Postman](https://www.postman.com/)
 
-### Running with Docker Compose (Recommended)
+### Running with Docker Compose
 ```bash
-# Clone the repository
-git clone https://github.com/SaruonSopheakdey/ecommerce-project.git
-cd ecommerce-project
-
 # Build and start all services in detached mode
 docker compose up -d --build
 
-# Check running containers status
+# Check running container statuses
 docker compose ps
 ```
 
-All microservices will be live and accessible via the API Gateway:
-`http://localhost:8000` (or `http://<EC2-PUBLIC-IP>:8000`).
+Everything is reachable through Nginx on Port 80 only: `http://localhost` (or `http://<EC2-PUBLIC-IP>`).
 
 ---
 
 ## 📡 API Endpoints Reference
 
-### 1. API Gateway
+### 1. Edge & API Gateway
 | Method | Route | Description | Auth |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/health` | System health and route inspection | Public |
+| `GET` | `/health` | Gateway health and route inspection (returns replica instance ID) | Public |
+| `GET` | `/nginx-health` | Nginx edge health & upstream status | Public |
 
 ### 2. Auth Service (`/api/auth`)
 | Method | Route | Description | Payload |
@@ -118,7 +146,7 @@ All microservices will be live and accessible via the API Gateway:
 ### 3. Product Catalog Service (`/api/products`)
 | Method | Route | Description | Auth / Role |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/products` | Get all products | Bearer Token |
+| `GET` | `/api/products` | Get all products | Public / Bearer |
 | `POST` | `/api/products` | Create product | Bearer Token (Admin) |
 
 ### 4. Inventory Service (`/api/inventory`)
@@ -136,8 +164,8 @@ All microservices will be live and accessible via the API Gateway:
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/cart` | View current user's cart | Bearer Token (Customer) |
 | `POST` | `/api/cart/items` | Add item or increment quantity | Bearer Token (Customer) |
-| `PUT` | `/api/cart/items/:productId`| Update item quantity (0 removes item) | Bearer Token (Customer) |
-| `DELETE` | `/api/cart/items/:productId`| Remove specific item from cart | Bearer Token (Customer) |
+| `PUT` | `/api/cart/items/:productId` | Update item quantity (0 removes item) | Bearer Token (Customer) |
+| `DELETE` | `/api/cart/items/:productId` | Remove specific item from cart | Bearer Token (Customer) |
 | `DELETE` | `/api/cart` | Clear entire cart | Bearer Token (Customer) |
 | `GET` | `/api/cart/user/:userId` | View user cart | Bearer Token (Admin / Owner) |
 
@@ -172,115 +200,58 @@ All microservices will be live and accessible via the API Gateway:
 
 ## 🧪 Testing & Verification Guide
 
-### 1. Nginx Load Balancing Verification
+### 1. Load Balancing Verification (Two Levels)
 
-#### Load Balancer Configuration (`nginx/nginx.conf`):
-```nginx
-# Round-robin load balancing for Product Catalog
-upstream product_service_cluster {
-    server product-service-1:8003;
-    server product-service-2:8003;
-}
-
-# Round-robin load balancing for Review & Rating Service
-upstream review_service_cluster {
-    server review-service-1:8007;
-    server review-service-2:8007;
-}
-
-server {
-    listen 80;
-    
-    # Custom headers for verification
-    add_header X-Load-Balancer "Nginx" always;
-    add_header X-Upstream-Server $upstream_addr always;
-
-    location /api/products {
-        proxy_pass http://product_service_cluster;
-    }
-
-    location /api/reviews {
-        proxy_pass http://review_service_cluster;
-    }
-}
+#### Level 1: Nginx -> Gateway Replicas
+Send consecutive requests:
+```http
+GET http://localhost/health
 ```
+* Response header `X-Gateway-Instance` alternates between `gateway-instance-1` and `gateway-instance-2`.
+* Response header `X-Upstream-Server` alternates between the two gateway container IPs.
 
-#### Verification via Postman (Port 80 or Port 8000):
-Send consecutive `GET` requests to the Nginx Load Balancer:
+#### Level 2: Gateway -> Product / Review Replicas
 ```http
 GET http://localhost/api/reviews/health
-```
-*(On EC2, use `http://<EC2-PUBLIC-IP>/api/reviews/health` on default HTTP Port 80)*
-
-* **Request 1**:
-  * Response Header: `X-Load-Balancer: Nginx`
-  * Response Header: `X-Upstream-Server: 172.x.x.x:8007` (Instance 1)
-  * Response Header: `X-Served-By: review-instance-8007`
-* **Request 2**:
-  * Response Header: `X-Load-Balancer: Nginx`
-  * Response Header: `X-Upstream-Server: 172.x.x.x:8007` (Instance 2)
-  * Response Header: `X-Served-By: review-instance-8017`
-
-And similarly for Product Catalog:
-```http
 GET http://localhost/api/products/health
 ```
-* Alternates between `product-instance-8003` and `product-instance-8013`.
+* `X-Served-By` alternates between `review-instance-8007` / `review-instance-8017` and `product-instance-8003` / `product-instance-8013`.
+
+**Failover Demo:**
+Run `docker stop gateway-service-1`, then continue calling `http://localhost/health`. Nginx automatically routes 100% of traffic to `gateway-service-2` without downtime.
 
 ---
 
 ### 2. Security & RBAC Test Cases
 * **Wrong Password**:
-  * `POST http://localhost/api/auth/login` (or `:8000`) with incorrect password → `400 Bad Request` (`{"message": "Wrong password"}`)
+  * `POST http://localhost/api/auth/login` with incorrect password → `400 Bad Request` (`{"message": "Wrong password"}`)
 * **Invalid / Expired Token**:
-  * `GET http://localhost/api/reviews` with `Authorization: Bearer invalidtoken123` → `400 Bad Request` (`{"message": "Invalid or Expired Token"}`)
+  * `POST http://localhost/api/orders` with `Authorization: Bearer invalidtoken123` → `400 Bad Request` (`{"message": "Invalid or Expired Token"}`)
+* **Missing Token on Protected Route**:
+  * `POST http://localhost/api/orders` without Authorization header → `401 Unauthorized` (`{"message": "Access Denied: No Token Provided"}`)
 * **Unauthorized Role Mismatch**:
   * `POST http://localhost/api/products` using a Customer Token → `403 Forbidden` (`{"message": "Access Denied: Unauthorized Role"}`)
-* **Missing Token**:
-  * Any protected route without token → `401 Unauthorized` (`{"message": "Access Denied: No Token Provided"}`)
-
----
-
-### 3. Inspecting MongoDB Collections
-```bash
-docker exec -it ecommerce-mongo mongosh
-```
-```javascript
-use reviewdb
-show collections
-db.reviews.find().pretty()
-
-use notificationdb
-show collections
-db.notifications.find().pretty()
-```
 
 ---
 
 ## ☁️ Deployment on AWS EC2
-1. Launch an **Ubuntu 24.04** instance on EC2.
-2. **Security Group Inbound Rules (CRUCIAL)**:
+1. Launch an **Ubuntu 24.04** EC2 instance.
+2. **Security Group Inbound Rules**:
    * **Port 22** (`SSH`, `0.0.0.0/0`) — Remote terminal access.
-   * **Port 80** (`HTTP`, `0.0.0.0/0`) — **Nginx Load Balancer** entry.
-   * **Port 8000** (`Custom TCP`, `0.0.0.0/0`) — **API Gateway** entry.
-3. Install Docker & Compose:
+   * **Port 80** (`HTTP`, `0.0.0.0/0`) — **Nginx entrypoint** (the only application port that needs to be open).
+3. Install Docker:
    ```bash
    sudo apt update && sudo apt install -y git docker.io docker-compose-v2
    sudo usermod -aG docker $USER
    newgrp docker
    ```
-4. Clone repo and run:
+4. Clone and run:
    ```bash
+   git clone https://github.com/SaruonSopheakdey/ecommerce-project.git
+   cd ecommerce-project
    docker compose up -d --build
    ```
-5. Test against your Public IPv4 in Postman:
-   * Via Nginx Load Balancer: `http://<EC2-PUBLIC-IP>/api/reviews/health`
-   * Via API Gateway: `http://<EC2-PUBLIC-IP>:8000/api/reviews/health`
-
-
-## Cart & Checkout (Cart Service 8005, Order Service 8006)
-
-Owner: Chamnab Hoeum
-
-- Cart Service: add, update and remove items, view and clear cart (Customer); view any cart (Admin)
-- Order Service: checkout from cart, order history (Customer); view all orders and update status (Admin)
+5. Test against your Public IPv4 in Postman or browser:
+   * `http://<EC2-PUBLIC-IP>/health`
+   * `http://<EC2-PUBLIC-IP>/nginx-health`
+   * `http://<EC2-PUBLIC-IP>/api/reviews/health`

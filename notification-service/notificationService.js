@@ -2,11 +2,19 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { verifyToken, requireRole } = require('./authMiddleware');
-
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Middleware to extract user identity passed by the API Gateway
+app.use((req, res, next) => {
+  req.user = {
+    id: req.headers['x-user-id'] || null,
+    role: req.headers['x-user-role'] || 'Customer',
+    email: req.headers['x-user-email'] || ''
+  };
+  next();
+});
 
 const PORT = process.env.PORT || 8008;
 
@@ -63,7 +71,7 @@ router.get('/health', (req, res) => {
 });
 
 // Route 1: Create & Send Notification / Email (Authenticated)
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { userId, recipientEmail, orderId, type, subject, message } = req.body;
 
@@ -106,7 +114,7 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 // Route 2: Get All Notifications (Admin gets all, Customer gets own)
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     let query = {};
     if (req.user.role !== 'Admin') {
@@ -126,7 +134,7 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 // Route 3: Get Notifications for specific user (RBAC protected)
-router.get('/user/:userId', verifyToken, async (req, res) => {
+router.get('/user/:userId', async (req, res) => {
   try {
     const requestedUserId = req.params.userId;
     const currentUserId = req.user.id || req.user._id;
@@ -148,7 +156,7 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
 });
 
 // Route 4: Get Notification by ID
-router.get('/:id', verifyToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const notification = await Notification.findById(req.params.id);
     if (!notification) {
@@ -167,7 +175,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 });
 
 // Route 5: Mark Notification as Read
-router.put('/:id/read', verifyToken, async (req, res) => {
+router.put('/:id/read', async (req, res) => {
   try {
     const notification = await Notification.findById(req.params.id);
     if (!notification) {
@@ -192,7 +200,7 @@ router.put('/:id/read', verifyToken, async (req, res) => {
 });
 
 // Route 6: Delete a Notification (Owner or Admin)
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const notification = await Notification.findById(req.params.id);
     if (!notification) {

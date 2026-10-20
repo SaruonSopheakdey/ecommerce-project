@@ -1,0 +1,16 @@
+services:
+  # ----------------------------------------------------
+  # API Gateway - Replica 1 (Port 8000)
+  # Balanced by Nginx; forwards to microservices on EC2 #4
+  # ----------------------------------------------------
+  gateway-service:
+    build: ../../gateway-service
+    container_name: ec2-2-gateway-1
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - INSTANCE_ID=gateway-instance-1
+      - JWT_SECRET=${JWT_SECRET}
+      - SERVICES_HOST=${SERVICES_HOST}

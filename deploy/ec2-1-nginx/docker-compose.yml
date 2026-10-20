@@ -1,0 +1,12 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: ec2-1-nginx
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - EC2_2_PRIVATE_IP=${EC2_2_PRIVATE_IP:-localhost}
+      - EC2_3_PRIVATE_IP=${EC2_3_PRIVATE_IP:-localhost}
+    volumes:
+      - ./default.conf.template:/etc/nginx/templates/default.conf.template:ro

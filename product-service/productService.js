@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { verifyToken, requireRole } = require('./authMiddleware');
 
 const app = express();
 app.use(cors());
@@ -14,6 +13,16 @@ const INSTANCE_ID = process.env.INSTANCE_ID || `product-instance-${PORT}`;
 // Load balancing tracking header
 app.use((req, res, next) => {
   res.setHeader('X-Served-By', INSTANCE_ID);
+  next();
+});
+
+// Middleware to extract user identity passed by the API Gateway
+app.use((req, res, next) => {
+  req.user = {
+    id: req.headers['x-user-id'] || null,
+    role: req.headers['x-user-role'] || 'Customer',
+    email: req.headers['x-user-email'] || ''
+  };
   next();
 });
 
@@ -45,7 +54,7 @@ router.get('/health', (req, res) => {
 });
 
 // Route 1: Get All Products
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const products = await Product.find();
     res.json(products);
@@ -55,7 +64,11 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 // Route 2: Add Product (Admin Only)
-router.post('/', verifyToken, requireRole('Admin'), async (req, res) => {
+router.post('/', async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ message: "Access Denied: Unauthorized Role" });
+  }
+
   try {
     const product = new Product(req.body);
     await product.save();

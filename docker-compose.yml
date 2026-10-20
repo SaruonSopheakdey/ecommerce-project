@@ -1,6 +1,7 @@
 services:
   # ----------------------------------------------------
-  # Nginx Load Balancer & Reverse Proxy (Port 80)
+  # Nginx Load Balancer (Port 80)
+  # The ONLY port published to the outside world.
   # ----------------------------------------------------
   nginx-loadbalancer:
     build: ./nginx
@@ -9,187 +10,21 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - auth-service
-      - product-service-1
-      - product-service-2
-      - inventory-service
-      - cart-service
-      - order-service
-      - review-service-1
-      - review-service-2
-      - notification-service
+      - gateway-service-1
+      - gateway-service-2
 
   # ----------------------------------------------------
-  # MongoDB Database Service
+  # API Gateway - Replica 1 (Port 8000, Internal Only)
+  # Balanced by Nginx; handles JWT auth & header injection
   # ----------------------------------------------------
-  mongo:
-    image: mongo:7.0
-    container_name: ecommerce-mongo
-    restart: always
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-
-  # ----------------------------------------------------
-  # Auth Service (Port 8001)
-  # ----------------------------------------------------
-  auth-service:
-    build: ./auth-service
-    container_name: auth-service
-    restart: always
-    ports:
-      - "8001:8001"
-    environment:
-      - PORT=8001
-      - MONGO_URI=mongodb://mongo:27017/userdb
-      - JWT_SECRET=supersecretkey123
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # Product Catalog Service - Instance 1 (Port 8003) [Nginx Load Balanced]
-  # ----------------------------------------------------
-  product-service-1:
-    build: ./product-service
-    container_name: product-service-1
-    restart: always
-    ports:
-      - "8003:8003"
-    environment:
-      - PORT=8003
-      - INSTANCE_ID=product-instance-8003
-      - MONGO_URI=mongodb://mongo:27017/productdb
-      - JWT_SECRET=supersecretkey123
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # Product Catalog Service - Instance 2 (Port 8013) [Nginx Load Balanced]
-  # ----------------------------------------------------
-  product-service-2:
-    build: ./product-service
-    container_name: product-service-2
-    restart: always
-    ports:
-      - "8013:8003"
-    environment:
-      - PORT=8003
-      - INSTANCE_ID=product-instance-8013
-      - MONGO_URI=mongodb://mongo:27017/productdb
-      - JWT_SECRET=supersecretkey123
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # Inventory Service (Port 8004)
-  # ----------------------------------------------------
-  inventory-service:
-    build: ./inventory-service
-    container_name: inventory-service
-    restart: always
-    ports:
-      - "8004:8004"
-    environment:
-      - PORT=8004
-      - MONGO_URI=mongodb://mongo:27017/inventorydb
-      - JWT_SECRET=supersecretkey123
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # Cart Service (Port 8005)
-  # ----------------------------------------------------
-  cart-service:
-    build: ./cart-service
-    container_name: cart-service
-    restart: always
-    ports:
-      - "8005:8005"
-    environment:
-      - PORT=8005
-      - MONGO_URI=mongodb://mongo:27017/cartdb
-      - JWT_SECRET=supersecretkey123
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # Order Service (Port 8002)
-  # ----------------------------------------------------
-  order-service:
-    build: ./order-service
-    container_name: order-service
-    restart: always
-    ports:
-      - "8002:8002"
-    environment:
-      - PORT=8002
-      - MONGO_URI=mongodb://mongo:27017/orderdb
-      - JWT_SECRET=supersecretkey123
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # Review & Rating Service - Instance 1 (Port 8007) [Nginx Load Balanced]
-  # ----------------------------------------------------
-  review-service-1:
-    build: ./review-service
-    container_name: review-service-1
-    restart: always
-    ports:
-      - "8007:8007"
-    environment:
-      - PORT=8007
-      - INSTANCE_ID=review-instance-8007
-      - MONGO_URI=mongodb://mongo:27017/reviewdb
-      - JWT_SECRET=supersecretkey123
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # Review & Rating Service - Instance 2 (Port 8017) [Nginx Load Balanced]
-  # ----------------------------------------------------
-  review-service-2:
-    build: ./review-service
-    container_name: review-service-2
-    restart: always
-    ports:
-      - "8017:8007"
-    environment:
-      - PORT=8007
-      - INSTANCE_ID=review-instance-8017
-      - MONGO_URI=mongodb://mongo:27017/reviewdb
-      - JWT_SECRET=supersecretkey123
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # Notification & Email Service (Port 8008)
-  # ----------------------------------------------------
-  notification-service:
-    build: ./notification-service
-    container_name: notification-service
-    restart: always
-    ports:
-      - "8008:8008"
-    environment:
-      - PORT=8008
-      - MONGO_URI=mongodb://mongo:27017/notificationdb
-      - JWT_SECRET=supersecretkey123
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # API Gateway (Port 8000)
-  # ----------------------------------------------------
-  gateway-service:
+  gateway-service-1:
     build: ./gateway-service
-    container_name: gateway-service
+    container_name: gateway-service-1
     restart: always
-    ports:
-      - "8000:8000"
     environment:
       - PORT=8000
+      - INSTANCE_ID=gateway-instance-1
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey123}
       - AUTH_SERVICE_URL=http://auth-service:8001
       - PRODUCT_SERVICE_URLS=http://product-service-1:8003,http://product-service-2:8003
       - INVENTORY_SERVICE_URL=http://inventory-service:8004
@@ -207,6 +42,170 @@ services:
       - review-service-1
       - review-service-2
       - notification-service
+
+  # ----------------------------------------------------
+  # API Gateway - Replica 2 (Port 8000, Internal Only)
+  # Balanced by Nginx; handles JWT auth & header injection
+  # ----------------------------------------------------
+  gateway-service-2:
+    build: ./gateway-service
+    container_name: gateway-service-2
+    restart: always
+    environment:
+      - PORT=8000
+      - INSTANCE_ID=gateway-instance-2
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey123}
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - PRODUCT_SERVICE_URLS=http://product-service-1:8003,http://product-service-2:8003
+      - INVENTORY_SERVICE_URL=http://inventory-service:8004
+      - CART_SERVICE_URL=http://cart-service:8005
+      - ORDER_SERVICE_URL=http://order-service:8002
+      - REVIEW_SERVICE_URLS=http://review-service-1:8007,http://review-service-2:8007
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8008
+    depends_on:
+      - auth-service
+      - product-service-1
+      - product-service-2
+      - inventory-service
+      - cart-service
+      - order-service
+      - review-service-1
+      - review-service-2
+      - notification-service
+
+  # ----------------------------------------------------
+  # MongoDB Database Service (Loopback Only)
+  # ----------------------------------------------------
+  mongo:
+    image: mongo:7.0
+    container_name: ecommerce-mongo
+    restart: always
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  # ----------------------------------------------------
+  # Auth Service (Port 8001, Internal Only)
+  # ----------------------------------------------------
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    restart: always
+    environment:
+      - PORT=8001
+      - MONGO_URI=${MONGO_URI_AUTH:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/userdb?retryWrites=true&w=majority}
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey123}
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Product Catalog Service - Instance 1 (Port 8003, Internal Only)
+  # ----------------------------------------------------
+  product-service-1:
+    build: ./product-service
+    container_name: product-service-1
+    restart: always
+    environment:
+      - PORT=8003
+      - INSTANCE_ID=product-instance-8003
+      - MONGO_URI=${MONGO_URI_PRODUCT:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/productdb?retryWrites=true&w=majority}
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Product Catalog Service - Instance 2 (Port 8003, Internal Only)
+  # ----------------------------------------------------
+  product-service-2:
+    build: ./product-service
+    container_name: product-service-2
+    restart: always
+    environment:
+      - PORT=8003
+      - INSTANCE_ID=product-instance-8013
+      - MONGO_URI=${MONGO_URI_PRODUCT:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/productdb?retryWrites=true&w=majority}
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Inventory Service (Port 8004, Internal Only)
+  # ----------------------------------------------------
+  inventory-service:
+    build: ./inventory-service
+    container_name: inventory-service
+    restart: always
+    environment:
+      - PORT=8004
+      - MONGO_URI=${MONGO_URI_INVENTORY:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/inventorydb?retryWrites=true&w=majority}
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Cart Service (Port 8005, Internal Only)
+  # ----------------------------------------------------
+  cart-service:
+    build: ./cart-service
+    container_name: cart-service
+    restart: always
+    environment:
+      - PORT=8005
+      - MONGO_URI=${MONGO_URI_CART:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/cartdb?retryWrites=true&w=majority}
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Order Service (Port 8002, Internal Only)
+  # ----------------------------------------------------
+  order-service:
+    build: ./order-service
+    container_name: order-service
+    restart: always
+    environment:
+      - PORT=8002
+      - MONGO_URI=${MONGO_URI_ORDER:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/orderdb?retryWrites=true&w=majority}
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Review & Rating Service - Instance 1 (Port 8007, Internal Only)
+  # ----------------------------------------------------
+  review-service-1:
+    build: ./review-service
+    container_name: review-service-1
+    restart: always
+    environment:
+      - PORT=8007
+      - INSTANCE_ID=review-instance-8007
+      - MONGO_URI=${MONGO_URI_REVIEW:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/reviewdb?retryWrites=true&w=majority}
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Review & Rating Service - Instance 2 (Port 8007, Internal Only)
+  # ----------------------------------------------------
+  review-service-2:
+    build: ./review-service
+    container_name: review-service-2
+    restart: always
+    environment:
+      - PORT=8007
+      - INSTANCE_ID=review-instance-8017
+      - MONGO_URI=${MONGO_URI_REVIEW:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/reviewdb?retryWrites=true&w=majority}
+    depends_on:
+      - mongo
+
+  # ----------------------------------------------------
+  # Notification & Email Service (Port 8008, Internal Only)
+  # ----------------------------------------------------
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    restart: always
+    environment:
+      - PORT=8008
+      - MONGO_URI=${MONGO_URI_NOTIFICATION:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/notificationdb?retryWrites=true&w=majority}
+    depends_on:
+      - mongo
 
 volumes:
   mongo-data:
