@@ -14,17 +14,31 @@ services:
       - JWT_SECRET=${JWT_SECRET}
 
   # ----------------------------------------------------
-  # Product Catalog Service (Port 8003)
+  # Product Catalog Service - Instance 1 (Port 8003)
   # ----------------------------------------------------
-  product-service:
+  product-service-1:
     build: ../../product-service
-    container_name: ec2-4-product
+    container_name: ec2-4-product-1
     restart: always
     ports:
       - "8003:8003"
     environment:
       - PORT=8003
-      - INSTANCE_ID=product-instance-ec2-4
+      - INSTANCE_ID=product-instance-8003
+      - MONGO_URI=${MONGO_URI_PRODUCT:-${MONGODB_URI_BASE}/productdb?retryWrites=true&w=majority}
+
+  # ----------------------------------------------------
+  # Product Catalog Service - Instance 2 (Port 8013)
+  # ----------------------------------------------------
+  product-service-2:
+    build: ../../product-service
+    container_name: ec2-4-product-2
+    restart: always
+    ports:
+      - "8013:8003"
+    environment:
+      - PORT=8003
+      - INSTANCE_ID=product-instance-8013
       - MONGO_URI=${MONGO_URI_PRODUCT:-${MONGODB_URI_BASE}/productdb?retryWrites=true&w=majority}
 
   # ----------------------------------------------------

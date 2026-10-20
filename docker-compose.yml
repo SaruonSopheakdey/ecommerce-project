@@ -30,7 +30,7 @@ services:
       - INVENTORY_SERVICE_URL=http://inventory-service:8004
       - CART_SERVICE_URL=http://cart-service:8005
       - ORDER_SERVICE_URL=http://order-service:8002
-      - REVIEW_SERVICE_URLS=http://review-service-1:8007,http://review-service-2:8007
+      - REVIEW_SERVICE_URL=http://review-service:8007
       - NOTIFICATION_SERVICE_URL=http://notification-service:8008
     depends_on:
       - auth-service
@@ -39,8 +39,7 @@ services:
       - inventory-service
       - cart-service
       - order-service
-      - review-service-1
-      - review-service-2
+      - review-service
       - notification-service
 
   # ----------------------------------------------------
@@ -60,7 +59,7 @@ services:
       - INVENTORY_SERVICE_URL=http://inventory-service:8004
       - CART_SERVICE_URL=http://cart-service:8005
       - ORDER_SERVICE_URL=http://order-service:8002
-      - REVIEW_SERVICE_URLS=http://review-service-1:8007,http://review-service-2:8007
+      - REVIEW_SERVICE_URL=http://review-service:8007
       - NOTIFICATION_SERVICE_URL=http://notification-service:8008
     depends_on:
       - auth-service
@@ -69,8 +68,7 @@ services:
       - inventory-service
       - cart-service
       - order-service
-      - review-service-1
-      - review-service-2
+      - review-service
       - notification-service
 
   # ----------------------------------------------------
@@ -167,29 +165,15 @@ services:
       - mongo
 
   # ----------------------------------------------------
-  # Review & Rating Service - Instance 1 (Port 8007, Internal Only)
+  # Review & Rating Service (Port 8007, Internal Only)
   # ----------------------------------------------------
-  review-service-1:
+  review-service:
     build: ./review-service
-    container_name: review-service-1
+    container_name: review-service
     restart: always
     environment:
       - PORT=8007
       - INSTANCE_ID=review-instance-8007
-      - MONGO_URI=${MONGO_URI_REVIEW:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/reviewdb?retryWrites=true&w=majority}
-    depends_on:
-      - mongo
-
-  # ----------------------------------------------------
-  # Review & Rating Service - Instance 2 (Port 8007, Internal Only)
-  # ----------------------------------------------------
-  review-service-2:
-    build: ./review-service
-    container_name: review-service-2
-    restart: always
-    environment:
-      - PORT=8007
-      - INSTANCE_ID=review-instance-8017
       - MONGO_URI=${MONGO_URI_REVIEW:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/reviewdb?retryWrites=true&w=majority}
     depends_on:
       - mongo

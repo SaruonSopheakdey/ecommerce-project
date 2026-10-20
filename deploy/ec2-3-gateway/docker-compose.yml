@@ -14,3 +14,4 @@ services:
       - INSTANCE_ID=gateway-instance-2
       - JWT_SECRET=${JWT_SECRET}
       - SERVICES_HOST=${SERVICES_HOST}
+      - PRODUCT_SERVICE_URLS=http://${SERVICES_HOST}:8003,http://${SERVICES_HOST}:8013

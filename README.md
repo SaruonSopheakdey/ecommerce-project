@@ -11,8 +11,8 @@ The system has **one public entry point** and three clearly separated layers. Ea
 | Layer | Component | Job | Reachable from outside? |
 | :--- | :--- | :--- | :--- |
 | 1. Edge | **Nginx** (port `80`) | Single public entry point. Round-robin load balances across the API Gateway replicas with active failover. | ✅ Yes (only port 80) |
-| 2. Gateway | **API Gateway** x2 replicas (port `8000`, internal) | Routes `/api/*` to the owning service, verifies the JWT at the edge, sanitizes spoofed headers, forwards verified identity as `X-User-*` headers, and load balances product/review instances. | ❌ Internal only |
-| 3. Services | **8 microservices** (+ 2 instances each of Product and Review) | Business logic. Downstream services consume verified `X-User-*` headers directly, eliminating repetitive token decoding code. | ❌ Internal only |
+| 2. Gateway | **API Gateway** x2 replicas (port `8000`, internal) | Routes `/api/*` to the owning service, verifies the JWT at the edge, sanitizes spoofed headers, forwards verified identity as `X-User-*` headers, and load balances product instances. | ❌ Internal only |
+| 3. Services | **8 microservices** (+ 2 instances of Product Service) | Business logic. Downstream services consume verified `X-User-*` headers directly, eliminating repetitive token decoding code. | ❌ Internal only |
 
 ```
                         +-----------------------+
@@ -33,7 +33,7 @@ The system has **one public entry point** and three clearly separated layers. Ea
      +-----------+-----------+--------+--------+-----------+-------------+
      |           |           |        |        |           |             |
      v           v           v        v        v           v             v
-  [Auth]    [Product x2] [Inventory] [Cart]  [Order]   [Review x2]  [Notification]
+  [Auth]    [Product x2] [Inventory] [Cart]  [Order]    [Review]   [Notification]
   userdb     productdb   inventorydb cartdb  orderdb    reviewdb    notificationdb
      \___________\___________\________|________/___________/_____________/
                                   MongoDB (internal network)
@@ -52,11 +52,11 @@ flowchart TD
 
     subgraph SVC ["Microservices (internal only)"]
         G1 & G2 --> AS["Auth (8001)"]
-        G1 & G2 -->|Round-Robin| PC["Product x2 (8003)"]
+        G1 & G2 -->|Round-Robin| PC["Product x2 (8003 & 8013)"]
         G1 & G2 --> IS["Inventory (8004)"]
         G1 & G2 --> CS["Cart (8005)"]
         G1 & G2 --> OS["Order (8002)"]
-        G1 & G2 -->|Round-Robin| RS["Review x2 (8007)"]
+        G1 & G2 --> RS["Review (8007)"]
         G1 & G2 --> NS["Notification (8008)"]
     end
 
@@ -82,13 +82,13 @@ flowchart TD
 | Role | Service | Port | Database | Responsibilities |
 | :--- | :--- | :--- | :--- | :--- |
 | **Edge** | **Nginx** | `80` (public) | N/A | Only public entry point. Round-robin load balances gateway replicas. |
-| **Gateway** | **Gateway Service** (x2) | `8000` (internal) | N/A | Routing, centralized JWT validation, header sanitization, identity injection, Product & Review load balancing. |
+| **Gateway** | **Gateway Service** (x2) | `8000` (internal) | N/A | Routing, centralized JWT validation, header sanitization, identity injection, Product catalog load balancing. |
 | **Core** | **Auth Service** | `8001` (internal) | `userdb` | User registration, login, password hashing (bcrypt), JWT generation. |
-| **Member 1** | **Product Catalog** | `8003` (x2 instances) | `productdb` | Product catalog, CRUD operations, multi-instance load balancing. |
+| **Member 1** | **Product Catalog** | `8003` & `8013` | `productdb` | Product catalog, CRUD operations, multi-instance load balancing. |
 | **Member 1** | **Inventory Service** | `8004` (internal) | `inventorydb` | Stock tracking, low stock alerts, atomic stock deduction. |
 | **Member 2** | **Cart Service** | `8005` (internal) | `cartdb` | Item management, quantity updates, cart calculation. |
 | **Member 2** | **Order Service** | `8002` (internal) | `orderdb` | Order placement, user order history. |
-| **Member 3** | **Review & Rating Service** | `8007` (x2 instances) | `reviewdb` | Product reviews, ratings (1-5), average rating aggregation, multi-instance load balancing. |
+| **Member 3** | **Review & Rating Service** | `8007` (internal) | `reviewdb` | Product reviews, ratings (1-5), average rating aggregation. |
 | **Member 3** | **Notification Service** | `8008` (internal) | `notificationdb` | Email dispatch simulator, order notification logs. |
 
 ---
@@ -100,7 +100,7 @@ flowchart TD
    * Prevents bypassing authentication or direct manipulation of microservice endpoints.
 2. **Two-Tier Load Balancing & High Availability**
    * **Tier 1 (Nginx -> Gateway Cluster)**: Nginx round-robins requests across `gateway-service-1` and `gateway-service-2`. If one gateway goes down, Nginx automatically fails over to the surviving instance without dropping client connections.
-   * **Tier 2 (Gateway -> Clustered Services)**: Gateways round-robin requests across `product-service-1` / `product-service-2` and `review-service-1` / `review-service-2`.
+   * **Tier 2 (Gateway -> Clustered Product Services)**: Gateways round-robin requests across `product-service-1` / `product-service-2`.
 3. **Centralized Authentication (DRY Architecture)**
    * Avoids repeating `authMiddleware.js` and `jsonwebtoken` packages across 6 microservices.
    * Gateway strips external `x-user-*` headers, validates the incoming Bearer token once, and injects authenticated identity headers downstream.
@@ -210,12 +210,11 @@ GET http://localhost/health
 * Response header `X-Gateway-Instance` alternates between `gateway-instance-1` and `gateway-instance-2`.
 * Response header `X-Upstream-Server` alternates between the two gateway container IPs.
 
-#### Level 2: Gateway -> Product / Review Replicas
+#### Level 2: Gateway -> Product Replicas
 ```http
-GET http://localhost/api/reviews/health
 GET http://localhost/api/products/health
 ```
-* `X-Served-By` alternates between `review-instance-8007` / `review-instance-8017` and `product-instance-8003` / `product-instance-8013`.
+* `X-Served-By` alternates between `product-instance-8003` and `product-instance-8013`.
 
 **Failover Demo:**
 Run `docker stop gateway-service-1`, then continue calling `http://localhost/health`. Nginx automatically routes 100% of traffic to `gateway-service-2` without downtime.

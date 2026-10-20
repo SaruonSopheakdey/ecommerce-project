@@ -174,15 +174,8 @@ app.use('/api/orders', createProxyMiddleware({
 }));
 
 // 6. Review & Rating Service (Port 8007)
-const reviewInstances = (process.env.REVIEW_SERVICE_URLS || REVIEW_SERVICE_URL).split(',').map(s => s.trim());
-let reviewTurn = 0;
-
 app.use('/api/reviews', createProxyMiddleware({ 
-  router: () => {
-    const selectedTarget = reviewInstances[reviewTurn % reviewInstances.length];
-    reviewTurn++;
-    return selectedTarget;
-  },
+  target: REVIEW_SERVICE_URL, 
   changeOrigin: true,
   on: {
     proxyReq: injectUserHeaders,
@@ -214,7 +207,7 @@ app.get('/health', (req, res) => {
       inventory: INVENTORY_SERVICE_URL,
       cart: CART_SERVICE_URL,
       orders: ORDER_SERVICE_URL,
-      reviews: reviewInstances,
+      reviews: REVIEW_SERVICE_URL,
       notifications: NOTIFICATION_SERVICE_URL
     }
   });
