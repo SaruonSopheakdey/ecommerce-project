@@ -81,6 +81,24 @@ const gatewayAuthMiddleware = (req, res, next) => {
 // Apply centralized JWT verification to all incoming requests
 app.use(gatewayAuthMiddleware);
 
+// Fail fast with a JSON 504 if a downstream service never answers (e.g. blocked by a
+// security group) instead of leaving Postman hanging for minutes.
+const PROXY_TIMEOUT_MS = 10000;
+app.use((req, res, next) => {
+  const timer = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error(`[API Gateway ${INSTANCE_ID}] Timeout after ${PROXY_TIMEOUT_MS}ms on ${req.originalUrl}`);
+      res.status(504).json({
+        error: "Gateway Timeout",
+        message: `Downstream service did not respond within ${PROXY_TIMEOUT_MS / 1000}s. Check EC2 #4 security group (ports 8001-8008) and SERVICES_HOST.`,
+        gatewayInstance: INSTANCE_ID
+      });
+    }
+  }, PROXY_TIMEOUT_MS);
+  res.on('close', () => clearTimeout(timer));
+  next();
+});
+
 // Helper to inject identity headers into outgoing proxy requests
 const injectUserHeaders = (proxyReq, req) => {
   if (req.user) {

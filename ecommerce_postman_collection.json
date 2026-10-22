@@ -35,17 +35,18 @@
       "name": "0. Health & Load Balancer Verification",
       "item": [
         {
-          "name": "Nginx Health Check (Port 80)",
+          "name": "Nginx Health Check (EC2 #1, Port 80)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "http://{{ec2_gateway_ip}}:80/health",
+              "raw": "http://{{ec2_gateway_ip}}:{{ec2_gateway_port}}/nginx-health",
               "host": [
-                "http://{{ec2_gateway_ip}}:80"
+                "{{ec2_gateway_ip}}"
               ],
               "path": [
-                "health"
-              ]
+                "nginx-health"
+              ],
+              "port": "{{ec2_gateway_port}}"
             }
           }
         },

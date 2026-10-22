@@ -41,7 +41,10 @@ const Notification = mongoose.model('Notification', NotificationSchema);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/notificationdb';
 mongoose.connect(MONGO_URI)
   .then(() => console.log('Connected to MongoDB notificationdb'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .catch(err => {
+    console.error('MongoDB connection error:', err.message);
+    process.exit(1);
+  });
 
 // Email Dispatch Simulator (Production-like logging / Mailer hook)
 const dispatchEmail = async ({ to, subject, message, type, orderId }) => {

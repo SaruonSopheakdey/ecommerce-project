@@ -13,14 +13,16 @@ server {
 
     # Nginx Edge Health Endpoint
     location = /nginx-health {
+        default_type application/json;
         return 200 '{"status":"UP","service":"nginx-edge","node":"ec2-1-nginx","gateways":["${EC2_2_PRIVATE_IP}:8000","${EC2_3_PRIVATE_IP}:8000"]}';
-        add_header Content-Type application/json;
     }
 
     # Round-Robin Load Balance & Failover across Gateway Replicas (EC2 #2 & EC2 #3)
     location / {
         proxy_pass http://api_gateway_cluster;
-        proxy_next_upstream error timeout http_502 http_503;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 30s;
+        proxy_next_upstream error timeout http_502 http_503 http_504;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

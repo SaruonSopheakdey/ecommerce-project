@@ -48,7 +48,10 @@ const Cart = mongoose.model('Cart', CartSchema);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/cartdb';
 mongoose.connect(MONGO_URI)
   .then(() => console.log('Connected to MongoDB cartdb'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .catch(err => {
+    console.error('MongoDB connection error:', err.message);
+    process.exit(1);
+  });
 
 const router = express.Router();
 

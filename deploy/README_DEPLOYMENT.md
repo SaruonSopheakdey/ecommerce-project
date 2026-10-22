@@ -58,7 +58,7 @@ Configure your AWS Security Groups with the following inbound rules:
 | **EC2 #3** | **Gateway Replica 2** | `22` | TCP | `0.0.0.0/0` | SSH Administration |
 | | | `8000` | TCP | `172.31.0.0/16` (or EC2 #1 Private IP) | Gateway requests from Nginx |
 | **EC2 #4** | **Core Microservices** | `22` | TCP | `0.0.0.0/0` | SSH Administration |
-| | | `8001 - 8008` | TCP | `172.31.0.0/16` (or EC2 #2/#3 Private IP) | Microservice requests from Gateways |
+| | | `8001 - 8008` (includes `8006` = 2nd product instance) | TCP | `172.31.0.0/16` (or EC2 #2/#3 Private IP) | Microservice requests from Gateways |
 
 ---
 
@@ -119,7 +119,7 @@ cd ecommerce-project
    cp .env.example .env
    nano .env
    ```
-   Set `JWT_SECRET` and point `SERVICES_HOST` to **EC2 #4 Private IP**:
+   Set `JWT_SECRET` (use a long random value, not the example) and point `SERVICES_HOST` to **EC2 #4 Private IP**:
    ```env
    JWT_SECRET=supersecretkey123
    SERVICES_HOST=172.31.40.10
@@ -142,7 +142,7 @@ cd ecommerce-project
    cp .env.example .env
    nano .env
    ```
-   Set `JWT_SECRET` and point `SERVICES_HOST` to **EC2 #4 Private IP**:
+   Set `JWT_SECRET` (use a long random value, not the example) and point `SERVICES_HOST` to **EC2 #4 Private IP**:
    ```env
    JWT_SECRET=supersecretkey123
    SERVICES_HOST=172.31.40.10

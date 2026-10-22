@@ -43,7 +43,10 @@ const Review = mongoose.model('Review', ReviewSchema);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/reviewdb';
 mongoose.connect(MONGO_URI)
   .then(() => console.log(`Connected to MongoDB reviewdb [Instance: ${INSTANCE_ID}]`))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .catch(err => {
+    console.error('MongoDB connection error:', err.message);
+    process.exit(1);
+  });
 
 const router = express.Router();
 

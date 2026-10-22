@@ -38,7 +38,10 @@ const Product = mongoose.model('Product', ProductSchema);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/productdb';
 mongoose.connect(MONGO_URI)
   .then(() => console.log(`Connected to MongoDB productdb [Instance: ${INSTANCE_ID}]`))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .catch(err => {
+    console.error('MongoDB connection error:', err.message);
+    process.exit(1);
+  });
 
 const router = express.Router();
 

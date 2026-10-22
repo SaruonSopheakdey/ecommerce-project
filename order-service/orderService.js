@@ -31,7 +31,10 @@ const Order = mongoose.model('Order', OrderSchema);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/orderdb';
 mongoose.connect(MONGO_URI)
   .then(() => console.log('Connected to MongoDB orderdb'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .catch(err => {
+    console.error('MongoDB connection error:', err.message);
+    process.exit(1);
+  });
 
 const router = express.Router();
 
@@ -62,7 +65,8 @@ router.post('/', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const orders = await Order.find();
+    const filter = req.user.role === 'Admin' ? {} : { userId: req.user.id };
+    const orders = await Order.find(filter).sort({ createdAt: -1 });
     res.json(orders);
   } catch (err) {
     res.status(500).json({ error: err.message });

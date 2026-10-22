@@ -120,7 +120,7 @@ services:
     restart: always
     environment:
       - PORT=8003
-      - INSTANCE_ID=product-instance-8013
+      - INSTANCE_ID=product-instance-8006
       - MONGO_URI=${MONGO_URI_PRODUCT:-${MONGODB_URI_BASE:-mongodb://mongo:27017}/productdb?retryWrites=true&w=majority}
     depends_on:
       - mongo

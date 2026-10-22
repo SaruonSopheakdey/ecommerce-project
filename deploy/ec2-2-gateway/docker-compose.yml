@@ -12,6 +12,6 @@ services:
     environment:
       - PORT=8000
       - INSTANCE_ID=gateway-instance-1
-      - JWT_SECRET=${JWT_SECRET}
-      - SERVICES_HOST=${SERVICES_HOST}
-      - PRODUCT_SERVICE_URLS=http://${SERVICES_HOST}:8003,http://${SERVICES_HOST}:8013
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - SERVICES_HOST=${SERVICES_HOST:?Set SERVICES_HOST (EC2 #4 private IP) in .env}
+      - PRODUCT_SERVICE_URLS=http://${SERVICES_HOST}:8003,http://${SERVICES_HOST}:8006

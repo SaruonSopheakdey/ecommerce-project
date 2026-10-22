@@ -52,7 +52,7 @@ flowchart TD
 
     subgraph SVC ["Microservices (internal only)"]
         G1 & G2 --> AS["Auth (8001)"]
-        G1 & G2 -->|Round-Robin| PC["Product x2 (8003 & 8013)"]
+        G1 & G2 -->|Round-Robin| PC["Product x2 (8003 & 8006)"]
         G1 & G2 --> IS["Inventory (8004)"]
         G1 & G2 --> CS["Cart (8005)"]
         G1 & G2 --> OS["Order (8002)"]
@@ -84,7 +84,7 @@ flowchart TD
 | **Edge** | **Nginx** | `80` (public) | N/A | Only public entry point. Round-robin load balances gateway replicas. |
 | **Gateway** | **Gateway Service** (x2) | `8000` (internal) | N/A | Routing, centralized JWT validation, header sanitization, identity injection, Product catalog load balancing. |
 | **Core** | **Auth Service** | `8001` (internal) | `userdb` | User registration, login, password hashing (bcrypt), JWT generation. |
-| **Member 1** | **Product Catalog** | `8003` & `8013` | `productdb` | Product catalog, CRUD operations, multi-instance load balancing. |
+| **Member 1** | **Product Catalog** | `8003` & `8006` | `productdb` | Product catalog, CRUD operations, multi-instance load balancing. |
 | **Member 1** | **Inventory Service** | `8004` (internal) | `inventorydb` | Stock tracking, low stock alerts, atomic stock deduction. |
 | **Member 2** | **Cart Service** | `8005` (internal) | `cartdb` | Item management, quantity updates, cart calculation. |
 | **Member 2** | **Order Service** | `8002` (internal) | `orderdb` | Order placement, user order history. |
@@ -214,7 +214,7 @@ GET http://localhost/health
 ```http
 GET http://localhost/api/products/health
 ```
-* `X-Served-By` alternates between `product-instance-8003` and `product-instance-8013`.
+* `X-Served-By` alternates between `product-instance-8003` and `product-instance-8006`.
 
 **Failover Demo:**
 Run `docker stop gateway-service-1`, then continue calling `http://localhost/health`. Nginx automatically routes 100% of traffic to `gateway-service-2` without downtime.
